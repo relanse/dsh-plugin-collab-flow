@@ -213,7 +213,7 @@
   flex-shrink: 0;
 }
 
-.cf-node--pending .cf-node__dot    { background: var(--dsh-text-muted, #999); }
+.cf-node--pending .cf-node__dot    { background: var(--dsh-text-muted, #666666); }
 .cf-node--running .cf-node__dot    { background: var(--dsh-accent, #2563eb); }
 .cf-node--completed .cf-node__dot  { background: var(--dsh-success, #16a34a); }
 .cf-node--cancelled .cf-node__dot  { background: var(--dsh-warning, #d97706); }
@@ -253,7 +253,7 @@
 .cf-node__tokens {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: var(--dsh-text-muted, #888888);
+  color: var(--dsh-text-muted, #666666);
   flex-shrink: 0;
   font-family: ui-monospace, 'Cascadia Code', monospace;
 }
@@ -273,7 +273,7 @@
 /* 耗时 */
 .cf-node__duration {
   font-size: 10px;
-  color: var(--dsh-text-muted, #999);
+  color: var(--dsh-text-muted, #666666);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -286,7 +286,7 @@
   align-items: center;
   gap: 8px;
   padding: 32px 16px;
-  color: var(--dsh-text-muted, #888888);
+  color: var(--dsh-text-muted, #666666);
   text-align: center;
 }
 
@@ -521,7 +521,7 @@
 .cf-field__hint {
   margin: 0;
   font-size: 11px;
-  color: var(--dsh-text-muted, #888);
+  color: var(--dsh-text-muted, #666666);
   line-height: 1.4;
 }
 
