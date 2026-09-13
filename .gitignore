@@ -1,0 +1,40 @@
+# 私有文档 — 绝对不提交
+private_doc/
+
+# 构建产物
+packages/*/lib/
+*.tsbuildinfo
+
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 编辑器
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 测试覆盖率
+coverage/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# 临时文件
+*.tmp
+*.temp
