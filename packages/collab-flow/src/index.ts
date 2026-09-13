@@ -13,10 +13,15 @@ import type { WorkflowTemplate } from './types.ts'
  */
 export const name = 'collab-flow'
 
-export const inject = {
-  required: ['sessions', 'agents'],
-  optional: ['workflowEngine', 'tokenMeter', 'sessionProjections', 'locale', 'storage'],
-}
+// 声明插件提供的服务（ctx.provide 需要）
+export const provide = ['collab']
+
+// 暂时移除 inject 声明，让插件无条件激活
+// export const inject = {
+//   required: [],
+//   optional: ['sessions', 'agents', 'workflowEngine', 'tokenMeter', 'sessionProjections', 'locale', 'storage'],
+// }
+
 
 const graphBuilder = new GraphBuilder()
 const templateStore = new TemplateStore()
@@ -76,7 +81,7 @@ export function apply(ctx: Context): void {
   // 5. 暴露给 Client 的 Remote API
   // TODO: 按 DSH typert/Remote 约定实现，当前用临时占位
   // 需核实 packages/api/remotes 的 @Remote 装饰器用法
-  ;(ctx as any).collab = {
+  ctx.provide('collab', {
     getGraph(sessionId: string) {
       return graphBuilder.buildGraph(sessionId)
     },
@@ -118,5 +123,5 @@ export function apply(ctx: Context): void {
         ctx.logger?.warn('[collab-flow] workflow run 出错', err)
       })
     },
-  }
+  })
 }

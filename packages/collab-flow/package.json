@@ -12,7 +12,7 @@
     },
     "./client": {
       "types": "./lib/types/client.d.ts",
-      "default": "./lib/client.js"
+      "default": "./lib/client.cjs"
     }
   },
   "files": [
@@ -21,7 +21,10 @@
     "lib/types/**/*.d.ts"
   ],
   "dsh": {
-    "client": "./client"
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
   },
   "scripts": {
     "build": "tsdown",
