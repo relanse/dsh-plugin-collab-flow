@@ -19,7 +19,9 @@ import type { CollabRemote } from './remote.ts'
  * client.js resource and does not resolve sibling chunks.
  */
 export const name = 'collab-flow/client'
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.collab']
+// The namespace is installed by $mount below, so declaring remote.collab here
+// would deadlock the loader before apply() gets a chance to mount it.
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote']
 
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const disposeRemote = await ctx.remote.$mount(generatedRemote)
