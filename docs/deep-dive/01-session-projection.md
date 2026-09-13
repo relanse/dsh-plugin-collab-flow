@@ -17,6 +17,7 @@ SessionProjection 是 DSH 框架提供的**纯函数式状态折叠 API**，允�
 最直接的做法是在插件里 `ctx.on('session/event', handler)`，自己维护一个 `Map<sessionId, CollabGraphState>`。
 
 **问题：**
+
 - DSH 进程重启或插件热重载后，内存里的 Map 清空了，历史状态全部丢失
 - 如果 session 在插件挂载之前就已经有了事件，这些事件完全追不上
 - 需要自己处理并发（多个 session 同时活跃）
@@ -120,6 +121,7 @@ DSH 从 SQLite 读取上次的 (sessionId, key='collabFlow/graph', seq=N, state=
 ### 限制 2：apply() 必须是纯同步函数
 
 DSH 框架明确要求 apply() 不能是 async，因为：
+
 - 框架需要保证"每条事件恰好被 apply 一次且按序"
 - 如果 apply 是异步的，框架就需要处理并发和顺序问题，极大增加复杂性
 
@@ -132,27 +134,3 @@ DSH 框架明确要求 apply() 不能是 async，因为：
 ### 限制 4：stateVersion 变化必须 bump
 
 如果修改了 `apply()` 的语义（比如改变了某个字段的含义），必须把 `stateVersion: 1` 改成 `stateVersion: 2`。DSH 框架会自动丢弃旧版本的缓存，从头 replay，避免用错误的旧状态作为基准。
-
----
-
-## 面试常见追问
-
-**Q：为什么 apply 返回同一个引用就能表示"无变化"？**
-
-A：DSH 框架用 `Object.is(prevState, nextState)` 检测变化。JavaScript 里 `Object.is` 对对象比较的是引用（地址），不是内容深度比较。所以当 apply 收到一个不关心的事件（比如 `user/message`），我们直接 `return state`，返回同一个引用，框架就知道不需要更新水位线和触发下游工作。这是一种常见的性能优化模式，React 的 `useMemo` 和 Redux 的 selector 也用同样的思路。
-
-**Q：如果两个插件注册了同一个 projection key 会怎样？**
-
-A：DSH 的 `register()` 会抛错，除非两次注册的 `stateVersion` 相同——这种情况下两个注册共享同一个单元，并计数（最后一个注销时 key 才从投影中消失）。这是 DSH 的多插件组合场景设计，比如同一个工具包被挂载到多个 agent preset 时。
-
-**Q：projection 和 `session/event` 订阅相比，性能差距在哪里？**
-
-A：projection 框架做了两个关键优化：
-1. **水位线缓存**：不从头 replay，只 apply 新事件
-2. **引用同一性短路**：不关心的事件不触发下游，O(1) 跳过
-
-直接订阅 `session/event` 的话，每次都是全量处理，session 越长越慢。
-
-**Q：这个 projection 是"Host-only"的，为什么不暴露给 Client？**
-
-A：Client 通过 Remote API 实时拉取图快照（每秒轮询）。如果把 projection 暴露给 Client（声明 `wire` 字段），DSH 的 session-controller 会在每次 turn 结束时把状态推送给 Client，这对"查看实时运行状态"这个场景来说推送频率太低（只有 turn 结束时才推）。轮询反而更合适，因为 workflow 内子 agent 的启动/结束可以在一个 turn 内多次发生。
