@@ -1,29 +1,34 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "outDir": "lib/types",
-    "composite": true,
     "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2024", "DOM"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "downlevelIteration": true,
     "paths": {
-      "@deepseek-ai/cordis":                    ["../../../deepseek-harness/packages/core/cordis/src/index.ts"],
-      "@deepseek-ai/dsh-agent":                 ["../../../deepseek-harness/packages/core/agent/src/index.ts"],
-      "@deepseek-ai/dsh-session":               ["../../../deepseek-harness/packages/core/session/src/index.ts"],
-      "@deepseek-ai/dsh-session/types":         ["../../../deepseek-harness/packages/core/session/src/types.ts"],
-      "@deepseek-ai/dsh-workflow":              ["../../../deepseek-harness/packages/workflow/workflow/src/index.ts"],
-      "@deepseek-ai/dsh-workflow/types":        ["../../../deepseek-harness/packages/workflow/workflow/src/types.ts"],
-      "@deepseek-ai/dsh-subagent":              ["../../../deepseek-harness/packages/subagent/subagent/src/index.ts"],
-      "@deepseek-ai/dsh-session-projection":    ["../../../deepseek-harness/packages/session/session-projection/src/index.ts"],
+      "@deepseek-ai/cordis": ["../../../deepseek-harness/packages/core/cordis/src"],
+      "@deepseek-ai/dsh-agent": ["../../../deepseek-harness/packages/core/agent/src"],
+      "@deepseek-ai/dsh-session": ["../../../deepseek-harness/packages/core/session/src"],
+      "@deepseek-ai/dsh-session/types": ["../../../deepseek-harness/packages/core/session/src/types.ts"],
+      "@deepseek-ai/dsh-workflow": ["../../../deepseek-harness/packages/workflow/workflow/src"],
+      "@deepseek-ai/dsh-workflow/types": ["../../../deepseek-harness/packages/workflow/workflow/src/types.ts"],
+      "@deepseek-ai/dsh-subagent": ["../../../deepseek-harness/packages/subagent/subagent/src"],
+      "@deepseek-ai/dsh-session-projection": ["../../../deepseek-harness/packages/session/session-projection/src"],
       "@deepseek-ai/dsh-session-projection/types": ["../../../deepseek-harness/packages/session/session-projection/src/types.ts"],
-      "@deepseek-ai/dsh-storage":              ["../../../deepseek-harness/packages/storage/storage/src/index.ts"],
-      "@deepseek-ai/dsh-storage-domain":       ["../../../deepseek-harness/packages/storage/storage-domain/src/index.ts"],
-      "@deepseek-ai/dsh-token-meter":          ["../../../deepseek-harness/packages/llm/token-meter/src/index.ts"],
-      "@deepseek-ai/dsh-client-ui-slots":      ["../../../deepseek-harness/packages/client/ui-slots/src/index.ts"],
-      "@deepseek-ai/dsh-client-ui-sidebar-right": ["../../../deepseek-harness/packages/client/ui-sidebar-right/src/index.ts"],
-      "@deepseek-ai/dsh-client-ui-sidebar-right/client": ["../../../deepseek-harness/packages/client/ui-sidebar-right/src/client/index.ts"]
+      "@deepseek-ai/dsh-storage": ["../../../deepseek-harness/packages/storage/storage/src"],
+      "@deepseek-ai/dsh-storage-domain": ["../../../deepseek-harness/packages/storage/storage-domain/src"],
+      "@deepseek-ai/dsh-token-meter": ["../../../deepseek-harness/packages/llm/token-meter/src"],
+      "@deepseek-ai/dsh-client-ui-slots": ["../../../deepseek-harness/packages/client/ui-slots/src"],
+      "@deepseek-ai/dsh-client-ui-sidebar-right": ["../../../deepseek-harness/packages/client/ui-sidebar-right/src"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": []
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

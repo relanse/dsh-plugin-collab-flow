@@ -23,8 +23,8 @@ const templateStore = new TemplateStore()
 
 export function apply(ctx: Context): void {
   // 1. 多语言文案
-  ctx.inject(['locale'], (ctx: ContextWithLocale) => {
-    ctx.locale.register('collab-flow', {
+  ctx.inject(['locale'], (ctx) => {
+    (ctx as any).locale.register('collab-flow', {
       'zh-CN': {
         panelTitle: '协作流',
         liveView: '运行态',
@@ -118,13 +118,5 @@ export function apply(ctx: Context): void {
         ctx.logger?.warn('[collab-flow] workflow run 出错', err)
       })
     },
-  }
-}
-
-// ── 内部类型别名 ──────────────────────────────────────────────
-
-interface ContextWithLocale extends Context {
-  locale: {
-    register(namespace: string, messages: Record<string, Record<string, string>>): void
   }
 }

@@ -47,8 +47,8 @@ const collabGraphStateSchema = z.object({
 })
 
 export function registerProjection(ctx: Context): void {
-  ctx.inject(['sessionProjections'], (ctx: ContextWithProjections) => {
-    ctx.sessionProjections.register({
+  ctx.inject(['sessionProjections'], (ctx) => {
+    (ctx as any).sessionProjections.register({
       key: 'collabFlow/graph',
       stateVersion: 1,
       stateSchema: collabGraphStateSchema as any,
@@ -123,12 +123,6 @@ export function registerProjection(ctx: Context): void {
       },
     })
   })
-}
-
-interface ContextWithProjections extends Context {
-  sessionProjections: {
-    register(def: unknown): () => void
-  }
 }
 
 interface SessionEventShape {

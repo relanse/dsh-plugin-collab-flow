@@ -57,18 +57,15 @@ export class TemplateStore {
   private domain: DomainHandle | null = null
 
   async init(ctx: Context): Promise<void> {
-    ctx.inject(['storageDomain'], async (ctx: ContextWithStorageDomain) => {
+    ctx.inject(['storageDomain'], async (ctx) => {
       try {
-        // ctx.storageDomain.open(spec) 的实际 spec 类型需要 defineDomain() 的返回值
-        // 此处传入兼容形状，等真实 import 后替换
-        this.domain = await ctx.storageDomain.open(DOMAIN_SPEC as any)
-        // ctx.effect 确保插件卸载时关闭 domain
-        ctx.effect(() => () => {
+        this.domain = await (ctx as any).storageDomain.open(DOMAIN_SPEC as any)
+        ;(ctx as any).effect(() => () => {
           this.domain?.close()
           this.domain = null
         })
       } catch (err: unknown) {
-        ctx.logger?.warn('[collab-flow] 打开存储领域失败:', err)
+        (ctx as any).logger?.warn('[collab-flow] 打开存储领域失败:', err)
       }
     })
   }
@@ -109,14 +106,4 @@ interface KvTableHandle<K, V> {
 interface DomainHandle {
   templates: KvTableHandle<TemplateId, WorkflowTemplate>
   close(): Promise<void>
-}
-
-interface ContextWithStorageDomain extends Context {
-  storageDomain: {
-    open(spec: unknown): Promise<DomainHandle>
-  }
-  logger?: {
-    warn(msg: string, ...args: unknown[]): void
-  }
-  effect(fn: () => void | (() => void)): void
 }
