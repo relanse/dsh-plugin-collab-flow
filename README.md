@@ -25,7 +25,9 @@ dsh plugin --profile web add @dsh-community/plugin-collab-flow
 ## 前提条件
 
 - 使用 Claude Code / Codex 子 agent 时，需要在 DSH profile 中启用对应的 provider
-- workflow 模板功能需要 DSH profile 启用 `workflowEngine`（`dsh-base` 默认包含）
+- workflow 模板功能需要 DSH profile 启用 `workflowEngine`；Web profile 若将
+  `workflow-worker-thread` 或 `tool-workflow` 标记为 disabled，需要在 patch 中显式启用
+  这两个行（否则模板库仍可打开，但运行按钮会失败）
 
 ## 已知限制
 
