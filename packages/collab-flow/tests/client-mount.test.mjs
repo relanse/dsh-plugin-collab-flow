@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { apply } from '../lib/types/client/index.js'
+
+const requireNode = createRequire(import.meta.url)
+
+function loadClientApply() {
+  const code = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  let handoff
+  new Function('window', code)({ __ModuleLoader__: { load(value) { handoff = value } } })
+  return handoff.factory((specifier) => requireNode(specifier)).apply
+}
 
 test('client apply mounts Remote before registering UI and disposes both', async () => {
   const calls = []
@@ -37,7 +47,7 @@ test('client apply mounts Remote before registering UI and disposes both', async
     },
   }
 
-  const dispose = await apply(ctx)
+  const dispose = await loadClientApply()(ctx)
   assert.deepEqual(calls.slice(0, 2), [['mount', '@dsh-community/plugin-collab-flow'], ['inject']])
   await dispose()
   assert.deepEqual(calls.slice(-2), [['ui-dispose'], ['unmount']])

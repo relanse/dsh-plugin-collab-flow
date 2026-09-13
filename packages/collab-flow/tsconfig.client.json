@@ -18,7 +18,7 @@
       "@dsh-community/plugin-collab-flow/types": ["./types.ts"]
     }
   },
-  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/types.ts"],
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/client/**/*.d.ts", "src/types.ts"],
   "references": [
     { "path": "../../../deepseek-harness/packages/typert/protocol" },
     { "path": "../../../deepseek-harness/packages/api/remotes/tsconfig.client.json" },
