@@ -28,7 +28,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** Host services required by this plugin's Service constructor. */
 export class CollabFlowService extends TypertRemoteService {
-  static inject = ['agents', 'sessions', 'workflowEngine', 'sessionProjections', 'storageDomain']
+  // Typert must be ready before this service binds its remote namespace.
+  static inject = ['typert', 'agents', 'sessions', 'workflowEngine', 'sessionProjections', 'storageDomain']
 
   private readonly graphBuilder = new GraphBuilder()
   private readonly templateStore = new TemplateStore()
