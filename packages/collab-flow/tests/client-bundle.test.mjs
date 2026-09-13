@@ -24,5 +24,5 @@ test('client bundle registers a ModuleLoader factory', () => {
 
   const exports = handoff.factory((specifier) => requireNode(specifier))
   assert.equal(typeof exports.apply, 'function')
-  assert.deepEqual(exports.inject, ['slots', 'sidebarRightTabs'])
+  assert.deepEqual(exports.inject, ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.collab'])
 })

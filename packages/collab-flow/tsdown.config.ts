@@ -1,42 +1,44 @@
-import { defineConfig } from 'tsdown'
+import { clientBundle } from '../../../deepseek-harness/packages/client/tsdown.client.ts'
+import { typertPlugin } from '../../../deepseek-harness/packages/typert/generator/lib/types/tsdown-plugin.js'
+import type { UserConfig } from 'tsdown'
 
-const clientId = '@dsh-community/plugin-collab-flow'
+/** Shared browser identities seeded by the Harness Web shell. */
+const CLIENT_SHARED_MODULES = new Set([
+  'react',
+  'react/jsx-runtime',
+  'react-dom',
+  'react-dom/client',
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-client-store',
+  '@deepseek-ai/dsh-client-ui-slots',
+  '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-ui-dockkit',
+])
 
-export default defineConfig([
-  // ── Host 侧：Node.js ESM ──────────────────────────────────────
+const bundle = clientBundle(
+  '@dsh-community/plugin-collab-flow',
+  ['lib/types/index.js'],
   {
-    entry: { index: 'src/index.ts' },
-    format: ['esm'],
-    dts: { outDir: 'lib/types' },
-    outDir: 'lib',
-    platform: 'node',
-    external: [
-      /^@deepseek-ai\//,
-    ],
-  },
-  // ── Client 侧：Browser CJS（DSH ModuleLoader 工厂格式）──────────
-  // DSH 的 client-modules registry 执行 bundle 只应注册工厂；模块主体
-  // 在 Harness 物化该工厂时运行。发布包只提供 client.js，因此所有
-  // client-side dynamic imports 必须在这里合并为单个资源。
-  {
-    entry: { client: 'src/client/index.ts' },
-    format: ['cjs'],
-    outDir: 'lib',
-    platform: 'browser',
-    target: 'es2024',
-    clean: false,
-    sourcemap: true,
-    external: [
-      /^@deepseek-ai\//,
-      'react',
-      'react-dom',
-    ],
-    outputOptions: {
-      entryFileNames: 'client.js',
-      inlineDynamicImports: true,
-      banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(clientId)}, factory: (require) => {`,
-      footer: 'return module.exports; } });',
-      intro: 'var module = { exports: {} }; var exports = module.exports;',
+    hostPhase: true,
+    lib: {
+      plugins: [typertPlugin({ mode: 'package', faces: ['host'] })],
     },
   },
-])
+)
+
+/**
+ * The shared preset's dependency classifier scans the Harness monorepo. This
+ * package is intentionally out-of-tree, so use the same platform boundary
+ * while letting the package's generated Remote contribution stay inline.
+ */
+export default (input: { env?: Record<string, unknown> }): UserConfig[] => bundle(input).map(config => {
+  const isClient = config.name === '@dsh-community/plugin-collab-flow/client'
+  return {
+    ...config,
+    deps: {
+      neverBundle: true,
+      ...(isClient ? { alwaysBundle: (specifier: string) => !CLIENT_SHARED_MODULES.has(specifier) } : {}),
+    },
+    plugins: config.plugins?.filter(plugin => plugin.name !== 'dsh-client-bundle-purity'),
+  }
+})

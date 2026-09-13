@@ -1,25 +1,31 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { WorkflowTemplate } from '../types.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { TemplateEditor } from './template-editor.tsx'
+import type { CollabRemote } from './remote.ts'
 
 interface TemplateLibraryProps {
   sessionId: string | undefined
+  remote: CollabRemote
+  t: TranslateNS<'collabFlow'>
 }
 
-export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
+export function TemplateLibrary({ sessionId, remote, t }: TemplateLibraryProps) {
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
   const [editing, setEditing] = useState<WorkflowTemplate | null>(null)
   const [launching, setLaunching] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const remote = (window as any).__dsh_remote__?.collab
-
   const refresh = useCallback(async () => {
     try {
-      const list: WorkflowTemplate[] = await remote?.listTemplates() ?? []
-      setTemplates(list)
-    } catch (e: any) {
-      setError(e.message)
+      const result = await remote.listTemplates()
+      if (!result.ok) {
+        setError(`${result.error.code}: ${result.error.message}`)
+        return
+      }
+      setTemplates(result.value)
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : String(error))
     }
   }, [remote])
 
@@ -27,15 +33,16 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
 
   const handleLaunch = async (tpl: WorkflowTemplate) => {
     if (!sessionId) {
-      setError('请先选择一个会话')
+      setError(t('templates.selectSession'))
       return
     }
     setLaunching(tpl.id)
     setError(null)
     try {
-      await remote?.launchTemplate(sessionId, tpl.id)
-    } catch (e: any) {
-      setError(`启动失败：${e.message}`)
+      const result = await remote.launchTemplate(sessionId, tpl.id)
+      if (!result.ok) setError(t('templates.launchFailed', { message: `${result.error.code}: ${result.error.message}` }))
+    } catch (error: unknown) {
+      setError(t('templates.launchFailed', { message: error instanceof Error ? error.message : String(error) }))
     } finally {
       setLaunching(null)
     }
@@ -43,12 +50,16 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
 
   const handleDelete = async (id: string, name: string) => {
     // confirm 是浏览器原生对话框，符合 DSH Web 场景，不引入额外依赖
-    if (!window.confirm(`确定删除模板「${name}」？`)) return
+    if (!window.confirm(t('templates.confirmDelete', { name }))) return
     try {
-      await remote?.deleteTemplate(id)
+      const result = await remote.deleteTemplate(id)
+      if (!result.ok) {
+        setError(t('templates.deleteFailed', { message: `${result.error.code}: ${result.error.message}` }))
+        return
+      }
       await refresh()
-    } catch (e: any) {
-      setError(`删除失败：${e.message}`)
+    } catch (error: unknown) {
+      setError(t('templates.deleteFailed', { message: error instanceof Error ? error.message : String(error) }))
     }
   }
 
@@ -58,11 +69,13 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
       <TemplateEditor
         template={editing}
         onSave={async (tpl) => {
-          await remote?.saveTemplate(tpl)
+          const result = await remote.saveTemplate(tpl)
+          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
           setEditing(null)
           await refresh()
         }}
         onCancel={() => setEditing(null)}
+        t={t}
       />
     )
   }
@@ -74,7 +87,7 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
           className="cf-btn cf-btn--primary"
           onClick={() => setEditing(makeNewTemplate())}
         >
-          + 新建模板
+          {t('templates.new')}
         </button>
       </div>
 
@@ -84,10 +97,10 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
 
       {templates.length === 0 ? (
         <div className="cf-empty" role="status">
-          <p>暂无模板，点击"新建模板"开始</p>
+          <p>{t('templates.empty')}</p>
         </div>
       ) : (
-        <ul className="cf-tpl-list" aria-label="工作流模板">
+        <ul className="cf-tpl-list" aria-label={t('templates.aria')}>
           {templates.map(tpl => (
             <li key={tpl.id} className="cf-tpl-card">
               <div className="cf-tpl-card__header">
@@ -105,23 +118,23 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
                   onClick={() => handleLaunch(tpl)}
                   disabled={launching === tpl.id || !sessionId}
                   aria-busy={launching === tpl.id}
-                  aria-label={`运行模板 ${tpl.name}`}
+                  aria-label={t('templates.launchAria', { name: tpl.name })}
                 >
-                  {launching === tpl.id ? '启动中…' : '▶ 运行'}
+                  {launching === tpl.id ? t('templates.launching') : `▶ ${t('templates.launch')}`}
                 </button>
                 <button
                   className="cf-btn"
                   onClick={() => setEditing(tpl)}
-                  aria-label={`编辑模板 ${tpl.name}`}
+                  aria-label={t('templates.editAria', { name: tpl.name })}
                 >
-                  编辑
+                  {t('templates.edit')}
                 </button>
                 <button
                   className="cf-btn cf-btn--danger"
                   onClick={() => handleDelete(tpl.id, tpl.name)}
-                  aria-label={`删除模板 ${tpl.name}`}
+                  aria-label={t('templates.deleteAria', { name: tpl.name })}
                 >
-                  删除
+                  {t('templates.delete')}
                 </button>
               </div>
             </li>
@@ -135,10 +148,10 @@ export function TemplateLibrary({ sessionId }: TemplateLibraryProps) {
 function makeNewTemplate(): WorkflowTemplate {
   return {
     id: crypto.randomUUID(),
-    name: '',
-    description: '',
+    name: 'plan-dev-review',
+    description: '规划 → 开发 → 代码审查',
     script: DEFAULT_SCRIPT,
-    meta: { name: '', description: '' },
+    meta: { name: 'plan-dev-review', description: '规划 → 开发 → 代码审查' },
     tags: [],
     createdAt: 0,
     updatedAt: 0,
@@ -147,16 +160,6 @@ function makeNewTemplate(): WorkflowTemplate {
 
 // 内置"规划 → 开发 → 审查"骨架脚本，帮助用户快速上手
 const DEFAULT_SCRIPT = `\
-export const meta = {
-  name: 'plan-dev-review',
-  description: '规划 → 开发 → 代码审查',
-  phases: [
-    { title: '规划' },
-    { title: '开发' },
-    { title: '审查' },
-  ],
-}
-
 // args.task 是用户输入的任务描述
 const { task } = args ?? {}
 

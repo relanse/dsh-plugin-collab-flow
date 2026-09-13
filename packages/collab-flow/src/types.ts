@@ -33,15 +33,15 @@ export interface CollabGraphNode {
   kind: NodeKind
   label: string
   status: NodeStatus
-  parentId?: string
+  parentId?: string | undefined
   /** 子 agent 来源：'claude-code' | 'codex' | 'spawn-in-process' | 'fork-in-process' | 'dsh-sdk' */
-  provider?: string
+  provider?: string | undefined
   startedAt: number
-  endedAt?: number
-  tokens?: { input: number; output: number; total: number }
-  phaseTitle?: string
-  workflowName?: string
-  error?: string
+  endedAt?: number | undefined
+  tokens?: { input: number; output: number; total: number } | undefined
+  phaseTitle?: string | undefined
+  workflowName?: string | undefined
+  error?: string | undefined
 }
 
 /** 整个协作图快照（Client 端只读视图） */
@@ -59,8 +59,8 @@ export interface CollabGraph {
 export interface WorkflowTemplateMeta {
   name: string
   description: string
-  whenToUse?: string
-  phases?: Array<{ title: string; detail?: string }>
+  whenToUse?: string | undefined
+  phases?: Array<{ title: string; detail?: string | undefined }> | undefined
 }
 
 export interface WorkflowTemplate {
@@ -76,8 +76,11 @@ export interface WorkflowTemplate {
   updatedAt: number
 }
 
+/** JSON values accepted as workflow launch arguments. */
+export type WorkflowArgs = Record<string, string | number | boolean | null>
+
 // ── Remote API 契约（Host ↔ Client） ─────────────────────────
-// 实际 Remote 注册方式需按 DSH typert 约定实现，这里只定义契约形状
+// Host 方法上的 @Remote 会从这些公开类型生成严格 wire schema。
 
 export interface CollabRemoteApi {
   /** 读取当前 session 的协作图快照 */

@@ -1,6 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { WorkflowTemplate } from './types.ts'
+import {
+  defineDomain,
+  domainTable,
+  type Domain,
+} from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
+import type { WorkflowTemplate } from './types.ts'
 
 /**
  * 工作流模板持久化存储
@@ -18,7 +23,6 @@ import { z } from 'zod'
  * 此处用 z（zod）定义 schema，类型由 z.infer 自动派生。
  */
 
-// 模板的 zod schema（用于 DSH storage 校验持久化数据）
 const templateSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -31,79 +35,87 @@ const templateSchema = z.object({
     phases: z.array(z.object({
       title: z.string(),
       detail: z.string().optional(),
-    })).optional(),
-  }),
+    }).strict()).optional(),
+  }).strict(),
   tags: z.array(z.string()),
   createdAt: z.number(),
   updatedAt: z.number(),
-})
+}).strict()
 
 // 模板 id 作为表的 key 类型（字符串，DSH 的 KvTable key 是 phantom type）
 type TemplateId = string & { readonly __brand: 'TemplateId' }
 
-// defineDomain 声明。在模块顶层调用，领域名/表名格式错误会在包加载时立即抛出。
-// 实际调用需要 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
-// 这里用类型别名表达意图，等包依赖确认后替换为真实 import
-const DOMAIN_SPEC = {
-  name: 'collab_flow',       // 必须匹配 UNIT_NAME_RE（字母数字下划线）
+/** Durable, schema-validated template records owned by this plugin. */
+export const templateDomainSpec = defineDomain({
+  name: 'collab_flow',
   version: 1,
-  layout: 'single' as const, // 所有模板存在同一个 document 里
+  layout: 'single',
   tables: {
-    templates: {} as { keyType: TemplateId; valueType: z.infer<typeof templateSchema> },
+    templates: domainTable<TemplateId, WorkflowTemplate>(templateSchema),
   },
-}
+})
+
+type TemplateDomain = Domain<typeof templateDomainSpec>
 
 export class TemplateStore {
-  private domain: DomainHandle | null = null
+  private domain: TemplateDomain | undefined
+  private ready: Promise<void> = Promise.resolve()
 
-  async init(ctx: Context): Promise<void> {
-    ctx.inject(['storageDomain'], async (ctx) => {
-      try {
-        this.domain = await (ctx as any).storageDomain.open(DOMAIN_SPEC as any)
-        ;(ctx as any).effect(() => () => {
-          this.domain?.close()
-          this.domain = null
-        })
-      } catch (err: unknown) {
-        (ctx as any).logger?.warn('[collab-flow] 打开存储领域失败:', err)
-      }
+  /** Open the domain and tie it to the owner's lifecycle. */
+  init(ctx: Context): void {
+    let resolveReady!: () => void
+    let rejectReady!: (error: unknown) => void
+    this.ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
     })
+    ctx.effect(async () => {
+      try {
+        const domain = await ctx.storageDomain.open(templateDomainSpec)
+        this.domain = domain
+        resolveReady()
+        return async () => {
+          await domain.close()
+          if (this.domain === domain) this.domain = undefined
+        }
+      } catch (error) {
+        rejectReady(error)
+        throw error
+      }
+    }, 'collab-flow: template domain')
   }
 
-  list(): WorkflowTemplate[] {
-    if (!this.domain) return []
-    // KvTable.entries() 是同步快照迭代器
-    return [...this.domain.templates.entries()].map(([, v]) => v)
+  /** Return a stable snapshot of all templates. */
+  async list(): Promise<WorkflowTemplate[]> {
+    await this.ready
+    const domain = this.domain
+    if (domain === undefined) return []
+    return [...domain.table('templates').entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([, value]) => value)
   }
 
-  async save(tpl: WorkflowTemplate): Promise<void> {
-    if (!this.domain) throw new Error('存储服务未就绪')
+  /** Persist one template after applying server-owned timestamps. */
+  async save(template: WorkflowTemplate): Promise<void> {
+    await this.ready
+    const domain = this.requireDomain()
     const now = Date.now()
-    const toSave: WorkflowTemplate = {
-      ...tpl,
+    const value: WorkflowTemplate = {
+      ...template,
+      createdAt: template.createdAt || now,
       updatedAt: now,
-      createdAt: tpl.createdAt || now,
     }
-    // KvTable.put(key, value) 异步写，resolve 后已持久
-    await this.domain.templates.put(tpl.id as TemplateId, toSave)
+    await domain.table('templates').put(template.id as TemplateId, value)
   }
 
+  /** Delete one template; deleting an absent id is idempotent. */
   async delete(id: string): Promise<void> {
-    if (!this.domain) throw new Error('存储服务未就绪')
-    await this.domain.templates.delete(id as TemplateId)
+    await this.ready
+    await this.requireDomain().table('templates').delete(id as TemplateId)
   }
-}
 
-// ── 内部类型别名（等真实 import 后替换） ──────────────────────
-
-interface KvTableHandle<K, V> {
-  get(key: K): V | undefined
-  entries(): IterableIterator<[K, V]>
-  put(key: K, value: V): Promise<void>
-  delete(key: K): Promise<boolean>
-}
-
-interface DomainHandle {
-  templates: KvTableHandle<TemplateId, WorkflowTemplate>
-  close(): Promise<void>
+  private requireDomain(): TemplateDomain {
+    if (this.domain === undefined) throw new Error('collab-flow template storage is not ready')
+    return this.domain
+  }
 }

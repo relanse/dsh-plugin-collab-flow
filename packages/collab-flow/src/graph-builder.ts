@@ -1,271 +1,204 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { CollabGraphNode, CollabGraph } from './types.ts'
-// 以下 import type 触发 DSH 的声明合并，让 ctx.on('workflow/*') 等事件名进入 keyof Events
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type {
+  WorkflowAgentEndInfo,
+  WorkflowAgentInfo,
+  WorkflowResultInfo,
+  WorkflowRunInfo,
+} from '@deepseek-ai/dsh-workflow/types'
+import type { SubagentRunEndInfo, SubagentRunInfo } from '@deepseek-ai/dsh-subagent/types'
+import type {
+  CollabGraph,
+  CollabGraphNode,
+  NodeStatus,
+} from './types.ts'
 import type {} from '@deepseek-ai/dsh-workflow'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-tool-workflow/types'
 
-/**
- * 实时图构建器
- *
- * 监听 workflow/* 和 session/event(tool-workflow/*) 实时事件，
- * 维护按 sessionId 分桶的内存图状态。
- *
- * 架构说明：
- * - workflow/start 等事件里 WorkflowRunInfo 只有 { id, meta }，没有 parentSessionId
- * - 因此用 session/event 监听 tool-workflow/run-start 来建立
- *   WorkflowRunId → parentSessionId 的映射（该事件写在父 session 日志里）
- * - subagent/start 的 SubagentRunInfo 也没有 parentSessionId，
- *   通过 subagent/catalog (session 事件) 来追踪子 agent 的父 session
- *
- * 持久化图状态由 projection.ts 处理，两者叠加使用：
- * - 持久图（projection）= baseline，进程重启后可恢复
- * - 实时图（本模块）= 叠加层，更新频率高，进程重启后丢失
- */
+/** Live event overlay for the durable collaboration projection. */
 export class GraphBuilder {
-  /** sessionId → (nodeId → node) */
   private readonly graphs = new Map<string, Map<string, CollabGraphNode>>()
-  /** WorkflowRunId → parentSessionId，从 session/event 建立 */
   private readonly runToSession = new Map<string, string>()
-  /** SubagentRunId → parentSessionId，从 subagent/catalog session 事件建立 */
   private readonly childToParent = new Map<string, string>()
 
+  /** Register live workflow and subagent observers on the owner context. */
   register(ctx: Context): void {
-    // ── session/event：从持久化事件建立映射 ────────────────────
-    // tool-workflow/run-start 写在父 session 日志里，携带 runId 和 name
-    // subagent/catalog 写在父 session 日志里，携带 childId
-    ;(ctx as any).on('session/event', (session: SessionShape, event: SessionEventShape) => {
-      if (event.type === 'tool-workflow/run-start') {
-        const data = event.data as ToolWorkflowRunStartData
-        this.runToSession.set(data.runId, session.id)
-      }
-      if (event.type === 'subagent/catalog') {
-        const data = event.data as SubagentCatalogData
-        this.childToParent.set(data.childId, session.id)
-      }
+    ctx.on('session/event', (session: Session, event: SessionEvent) => {
+      if (event.type === 'tool-workflow/run-start') this.runToSession.set(event.data.runId, session.id)
+      if (event.type === 'subagent/catalog') this.childToParent.set(event.data.childId, session.id)
+      if (event.type === 'tool-workflow/run-end') this.runToSession.delete(event.data.runId)
     })
 
-    // ── workflow/* 实时事件 ────────────────────────────────────
-    ctx.on('workflow/start', (info) => {
-      const { id, meta } = info as WorkflowRunInfoShape
-      const parentSessionId = this.runToSession.get(id)
-      if (!parentSessionId) return  // session/event 可能还没到，容忍
-      const nodes = this.getOrCreate(parentSessionId)
-      nodes.set(id, {
-        id,
+    ctx.on('workflow/start', (info: WorkflowRunInfo) => {
+      const sessionId = this.runToSession.get(info.id)
+      if (sessionId === undefined) return
+      this.getOrCreate(sessionId).set(info.id, {
+        id: info.id,
         kind: 'workflow-run',
-        label: meta.name,
-        workflowName: meta.name,
+        label: info.meta.name,
+        workflowName: info.meta.name,
         status: 'running',
         startedAt: Date.now(),
       })
     })
 
-    ctx.on('workflow/phase', (info, title: string) => {
-      const { id } = info as WorkflowRunInfoShape
-      const parentSessionId = this.runToSession.get(id)
-      if (!parentSessionId) return
-      const nodes = this.getOrCreate(parentSessionId)
-      const phaseId = `${id}:phase:${title}`
-      nodes.set(phaseId, {
-        id: phaseId,
+    ctx.on('workflow/phase', (info: WorkflowRunInfo, title: string) => {
+      const sessionId = this.runToSession.get(info.id)
+      if (sessionId === undefined) return
+      const id = `${info.id}:phase:${title}`
+      const existing = this.getOrCreate(sessionId).get(id)
+      this.getOrCreate(sessionId).set(id, {
+        id,
         kind: 'workflow-phase',
         label: title,
         phaseTitle: title,
-        parentId: id,
+        parentId: info.id,
         status: 'running',
-        startedAt: Date.now(),
+        startedAt: existing?.startedAt ?? Date.now(),
       })
     })
 
-    ctx.on('workflow/agent-start', (info, agent) => {
-      const { id } = info as WorkflowRunInfoShape
-      const { seq, label, phase, childId } = agent as WorkflowAgentInfoShape
-      const parentSessionId = this.runToSession.get(id)
-      if (!parentSessionId) return
-      const nodes = this.getOrCreate(parentSessionId)
-      const parentId = phase ? `${id}:phase:${phase}` : id
-      nodes.set(childId, {
-        id: childId,
+    ctx.on('workflow/agent-start', (info: WorkflowRunInfo, agent: WorkflowAgentInfo) => {
+      const sessionId = this.runToSession.get(info.id)
+      if (sessionId === undefined) return
+      const parentId = agent.phase === undefined ? info.id : `${info.id}:phase:${agent.phase}`
+      const nodes = this.getOrCreate(sessionId)
+      if (agent.phase !== undefined && nodes.get(parentId) === undefined) {
+        nodes.set(parentId, {
+          id: parentId,
+          kind: 'workflow-phase',
+          label: agent.phase,
+          phaseTitle: agent.phase,
+          parentId: info.id,
+          status: 'running',
+          startedAt: Date.now(),
+        })
+      }
+      nodes.set(agent.childId, {
+        id: agent.childId,
         kind: 'subagent',
-        label,
+        label: agent.label,
         parentId,
         status: 'running',
         startedAt: Date.now(),
       })
     })
 
-    ctx.on('workflow/agent-end', (info, agent) => {
-      const { id } = info as WorkflowRunInfoShape
-      const { childId, outcome } = agent as WorkflowAgentEndInfoShape
-      const parentSessionId = this.runToSession.get(id)
-      if (!parentSessionId) return
-      const nodes = this.getOrCreate(parentSessionId)
-      const existing = nodes.get(childId)
-      if (!existing) return
-      nodes.set(childId, {
-        ...existing,
-        status: outcome === 'completed' ? 'completed'
-          : outcome === 'cancelled' ? 'cancelled' : 'error',
-        endedAt: Date.now(),
-      })
+    ctx.on('workflow/agent-end', (info: WorkflowRunInfo, agent: WorkflowAgentEndInfo) => {
+      const sessionId = this.runToSession.get(info.id)
+      if (sessionId === undefined) return
+      this.updateStatus(sessionId, agent.childId, agent.outcome === 'completed' ? 'completed' : agent.outcome === 'cancelled' ? 'cancelled' : 'error')
     })
 
-    ctx.on('workflow/end', (info, result) => {
-      const { id } = info as WorkflowRunInfoShape
-      const { stopReason, error } = result as WorkflowResultInfoShape
-      const parentSessionId = this.runToSession.get(id)
-      if (!parentSessionId) return
-      const nodes = this.getOrCreate(parentSessionId)
-      const existing = nodes.get(id)
-      if (!existing) return
-      nodes.set(id, {
-        ...existing,
-        status: stopReason === 'completed' ? 'completed'
-          : stopReason === 'cancelled' ? 'cancelled' : 'error',
-        endedAt: Date.now(),
-        error,
-      })
-      this.runToSession.delete(id)  // 清理映射
+    ctx.on('workflow/end', (info: WorkflowRunInfo, result: WorkflowResultInfo) => {
+      const sessionId = this.runToSession.get(info.id)
+      if (sessionId === undefined) return
+      this.updateStatus(sessionId, info.id, statusOf(result.stopReason), result.error)
+      const nodes = this.getOrCreate(sessionId)
+      for (const node of nodes.values()) {
+        if (node.parentId === info.id && node.kind === 'workflow-phase' && node.status === 'running') {
+          nodes.set(node.id, { ...node, status: statusOf(result.stopReason), endedAt: Date.now(), error: result.error })
+        }
+      }
+      this.runToSession.delete(info.id)
     })
 
-    // ── subagent/* 实时事件（非 workflow 路径的直接委派）──────
-    ctx.on('subagent/start', (info) => {
-      const { id, provider } = info as SubagentRunInfoShape
-      const parentSessionId = this.childToParent.get(id)
-      if (!parentSessionId) return
-      const nodes = this.getOrCreate(parentSessionId)
-      if (nodes.has(id)) return
-      nodes.set(id, {
-        id,
+    ctx.on('subagent/start', (info: SubagentRunInfo) => {
+      const sessionId = this.childToParent.get(info.id)
+      if (sessionId === undefined) return
+      const nodes = this.getOrCreate(sessionId)
+      if (nodes.has(info.id)) return
+      nodes.set(info.id, {
+        id: info.id,
         kind: 'subagent',
-        label: provider,
-        provider,
-        parentId: parentSessionId,
+        label: info.provider,
+        provider: info.provider,
+        parentId: sessionId,
         status: 'running',
         startedAt: Date.now(),
       })
     })
 
-    ctx.on('subagent/end', (info) => {
-      const { id, stopReason } = info as SubagentRunEndInfoShape
-      const parentSessionId = this.childToParent.get(id)
-      if (!parentSessionId) return
-      const nodes = this.getOrCreate(parentSessionId)
-      const existing = nodes.get(id)
-      if (!existing) return
-      nodes.set(id, {
-        ...existing,
-        status: stopReason === 'completed' ? 'completed'
-          : stopReason === 'aborted' ? 'cancelled' : 'error',
-        endedAt: Date.now(),
-      })
+    ctx.on('subagent/end', (info: SubagentRunEndInfo) => {
+      const sessionId = this.childToParent.get(info.id)
+      if (sessionId === undefined) return
+      this.updateStatus(sessionId, info.id, info.stopReason === 'completed' ? 'completed' : info.stopReason === 'aborted' ? 'cancelled' : 'error')
     })
   }
 
-  buildGraph(sessionId: string, rootLabel = 'Session'): CollabGraph {
-    const nodes = this.graphs.get(sessionId) ?? new Map<string, CollabGraphNode>()
-
-    const rootNode: CollabGraphNode = {
-      id: sessionId,
-      kind: 'root-agent',
-      label: rootLabel,
+  /**
+   * Attach a workflow started outside the model-facing tool recorder.
+   *
+   * `workflow/start` is emitted synchronously by the workflow engine, so a
+   * caller that invokes `workflowEngine.start()` directly must seed the
+   * mapping after `start()` returns. Later phase, member, and end events then
+   * use the same live overlay as recorder-backed runs.
+   * @param sessionId - the parent session that owns the workflow.
+   * @param info - the workflow identity and validated metadata.
+   */
+  trackWorkflow(sessionId: string, info: WorkflowRunInfo): void {
+    this.runToSession.set(info.id, sessionId)
+    this.getOrCreate(sessionId).set(info.id, {
+      id: info.id,
+      kind: 'workflow-run',
+      label: info.meta.name,
+      workflowName: info.meta.name,
       status: 'running',
-      startedAt: 0,
+      startedAt: Date.now(),
+    })
+  }
+
+  /** Build a complete root-plus-overlay snapshot for one session. */
+  buildGraph(sessionId: string, rootLabel = 'Session', baseline?: CollabGraph): CollabGraph {
+    const root: CollabGraphNode = { id: sessionId, kind: 'root-agent', label: rootLabel, status: 'running', startedAt: 0 }
+    const overlay = this.getOrCreate(sessionId)
+    const merged = new Map<string, CollabGraphNode>()
+    for (const node of baseline?.nodes ?? []) {
+      if (node.id !== sessionId) merged.set(node.id, node)
     }
-
-    const nodeArr: CollabGraphNode[] = [rootNode, ...nodes.values()]
-
+    for (const node of overlay.values()) merged.set(node.id, node)
+    const nodes = [root, ...merged.values()]
     const childrenOf: Record<string, string[]> = {}
-    for (const node of nodeArr) {
+    for (const node of nodes) {
       if (node.id === sessionId) continue
       const parent = node.parentId ?? sessionId
       ;(childrenOf[parent] ??= []).push(node.id)
     }
-
-    const runningCount = nodeArr.filter(n => n.status === 'running').length
-
-    return { sessionId, nodes: nodeArr, childrenOf, runningCount, updatedAt: Date.now() }
+    return {
+      sessionId,
+      nodes,
+      childrenOf,
+      runningCount: nodes.filter(node => node.id !== sessionId && node.status === 'running').length,
+      updatedAt: Math.max(baseline?.updatedAt ?? 0, Date.now()),
+    }
   }
 
+  /** Drop process-local state after a session is no longer observed. */
   clearSession(sessionId: string): void {
     this.graphs.delete(sessionId)
+    for (const [runId, owner] of this.runToSession) if (owner === sessionId) this.runToSession.delete(runId)
+    for (const [childId, owner] of this.childToParent) if (owner === sessionId) this.childToParent.delete(childId)
+  }
+
+  private updateStatus(sessionId: string, id: string, status: NodeStatus, error?: string): void {
+    const node = this.getOrCreate(sessionId).get(id)
+    if (node === undefined) return
+    const next = { ...node, status, endedAt: Date.now() }
+    this.getOrCreate(sessionId).set(id, error === undefined ? next : { ...next, error })
   }
 
   private getOrCreate(sessionId: string): Map<string, CollabGraphNode> {
-    let map = this.graphs.get(sessionId)
-    if (!map) {
-      map = new Map()
-      this.graphs.set(sessionId, map)
+    let nodes = this.graphs.get(sessionId)
+    if (nodes === undefined) {
+      nodes = new Map()
+      this.graphs.set(sessionId, nodes)
     }
-    return map
+    return nodes
   }
 }
 
-// ── 内部形状类型（源码已核实，仅用于本模块内类型推断） ────────
-
-interface SessionShape {
-  id: string
-}
-
-interface SessionEventShape {
-  type: string
-  data: unknown
-}
-
-// 来源：packages/workflow/tool-workflow/src/index.ts:119
-// append(session, 'tool-workflow/run-start', { runId: run.id, name: run.meta.name })
-interface ToolWorkflowRunStartData {
-  runId: string
-  name: string
-}
-
-// 来源：packages/subagent/subagent/src/catalog.ts:24-32
-// { version, childId, childCreatedAt, mode, label? }
-interface SubagentCatalogData {
-  childId: string
-  mode: 'one-shot' | 'continuable'
-  label?: string
-}
-
-// 来源：packages/workflow/workflow/src/types.ts:90-95
-interface WorkflowRunInfoShape {
-  id: string  // WorkflowRunId
-  meta: { name: string }
-}
-
-// 来源：packages/workflow/workflow/src/types.ts:98-107
-// label 是 string（不是 string | undefined），见源码第 102 行
-interface WorkflowAgentInfoShape {
-  seq: number
-  label: string
-  phase?: string
-  childId: string  // SessionId
-}
-
-// 来源：packages/workflow/workflow/src/types.ts:113-116
-// outcome: WorkflowAgentOutcome = 'completed' | 'failed' | 'cancelled'
-interface WorkflowAgentEndInfoShape extends WorkflowAgentInfoShape {
-  outcome: 'completed' | 'failed' | 'cancelled'
-}
-
-// 来源：packages/workflow/workflow/src/types.ts:124-131
-interface WorkflowResultInfoShape {
-  stopReason: 'completed' | 'cancelled' | 'error'
-  error?: string
-  agentsStarted: number
-}
-
-// 来源：packages/subagent/subagent/src/types.ts:80-94
-interface SubagentRunInfoShape {
-  runId: string
-  provider: string
-  id: string  // SessionId（child）
-  local: boolean
-}
-
-// 来源：packages/subagent/subagent/src/types.ts:100-117
-// stopReason 直接在 info 上，不是嵌套的 result.stopReason
-interface SubagentRunEndInfoShape extends SubagentRunInfoShape {
-  stopReason: string  // SubagentStopReason
+function statusOf(stopReason: string): NodeStatus {
+  return stopReason === 'completed' ? 'completed' : stopReason === 'cancelled' ? 'cancelled' : 'error'
 }

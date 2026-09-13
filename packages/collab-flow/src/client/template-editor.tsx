@@ -1,13 +1,16 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { WorkflowTemplate } from '../types.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 
 interface TemplateEditorProps {
   template: WorkflowTemplate
   onSave(tpl: WorkflowTemplate): Promise<void>
   onCancel(): void
+  t: TranslateNS<'collabFlow'>
 }
 
-export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorProps) {
+export function TemplateEditor({ template, onSave, onCancel, t }: TemplateEditorProps) {
   const [draft, setDraft] = useState<WorkflowTemplate>(template)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -17,9 +20,9 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
   const validate = (): boolean => {
     const next: Record<string, string> = {}
-    if (!draft.name.trim()) next.name = '请填写模板名称'
-    if (!draft.script.trim()) next.script = '请填写脚本内容'
-    if (!draft.meta.name.trim()) next['meta.name'] = '请填写 workflow meta.name'
+    if (!draft.name.trim()) next.name = t('editor.requiredName')
+    if (!draft.script.trim()) next.script = t('editor.requiredScript')
+    if (!draft.meta.name.trim()) next['meta.name'] = t('editor.requiredMetaName')
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -38,8 +41,8 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         },
       }
       await onSave(final)
-    } catch (e: any) {
-      setErrors({ form: `保存失败：${e.message}` })
+    } catch (error: unknown) {
+      setErrors({ form: t('editor.saveFailed', { message: error instanceof Error ? error.message : String(error) }) })
     } finally {
       setSaving(false)
     }
@@ -53,7 +56,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       onSubmit={e => { e.preventDefault(); handleSave() }}
       noValidate
     >
-      <h3 className="cf-editor__title">{isNew ? '新建模板' : '编辑模板'}</h3>
+      <h3 className="cf-editor__title">{isNew ? t('editor.new') : t('editor.edit')}</h3>
 
       {errors.form && (
         <p className="cf-editor__form-error" role="alert">{errors.form}</p>
@@ -61,7 +64,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
       <Field
         id="cf-tpl-name"
-        label="模板名称"
+        label={t('editor.name')}
         required
         error={errors.name}
       >
@@ -77,7 +80,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         />
       </Field>
 
-      <Field id="cf-tpl-desc" label="描述（可选）">
+      <Field id="cf-tpl-desc" label={t('editor.description')}>
         <input
           id="cf-tpl-desc"
           type="text"
@@ -89,10 +92,10 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
       <Field
         id="cf-tpl-script"
-        label="Workflow 脚本"
+        label={t('editor.script')}
         required
         error={errors.script}
-        hint="脚本内容会直接传给 DSH workflowEngine，语法等同于 Claude Code 动态 workflow 脚本"
+        hint={t('editor.scriptHint')}
       >
         {/* 生产环境建议换 CodeMirror；textarea 够用于 MVP */}
         <textarea
@@ -116,7 +119,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
           disabled={saving}
           aria-busy={saving}
         >
-          {saving ? '保存中…' : '保存'}
+          {saving ? t('loading') : t('editor.save')}
         </button>
         <button
           type="button"
@@ -124,7 +127,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
           onClick={onCancel}
           disabled={saving}
         >
-          取消
+          {t('editor.cancel')}
         </button>
       </div>
     </form>
@@ -137,9 +140,9 @@ interface FieldProps {
   id: string
   label: string
   required?: boolean
-  error?: string
-  hint?: string
-  children: React.ReactNode
+  error?: string | undefined
+  hint?: string | undefined
+  children: ReactNode
 }
 
 function Field({ id, label, required, error, hint, children }: FieldProps) {

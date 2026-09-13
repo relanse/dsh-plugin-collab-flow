@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { LiveView } from './live-view.tsx'
 import { TemplateLibrary } from './template-list.tsx'
+import { NS } from './locales.ts'
+import type { CollabRemote } from './remote.ts'
 
 /**
  * 面板根组件
@@ -11,37 +14,46 @@ import { TemplateLibrary } from './template-list.tsx'
  */
 
 // PropsRuntime 的形状（不 import DSH，手写最小契约）
-interface PanelProps {
-  sessionId: string | undefined
-  useTabInfo: () => { tab: { signal: AbortSignal } }
-}
+type PanelProps = PropsRuntime<'sidebar.right.pane.tab'>
+  & PropsLocale<typeof NS>
+  & InjectFace<{ remote: CollabRemote }>
 
 type TabKey = 'live' | 'templates'
 
-export function CollabFlowPanel({ sessionId }: PanelProps) {
+export function CollabFlowPanel({ sessionId, remote, t }: PanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('live')
 
   // session 切换时回到 live 视图
   useEffect(() => { setActiveTab('live') }, [sessionId])
 
+  const moveTab = (direction: 1 | -1) => {
+    const next: TabKey = activeTab === 'live'
+      ? (direction === 1 ? 'templates' : 'templates')
+      : (direction === 1 ? 'live' : 'live')
+    setActiveTab(next)
+    queueMicrotask(() => document.getElementById(next === 'live' ? 'cf-tab-live' : 'cf-tab-templates')?.focus())
+  }
+
   return (
     <div className="cf-panel">
-      <header className="cf-panel__tabs" role="tablist" aria-label="Collab Flow">
+      <header className="cf-panel__tabs" role="tablist" aria-label={t('panel.aria')}>
         <TabButton
           id="cf-tab-live"
           panelId="cf-panel-live"
           active={activeTab === 'live'}
           onClick={() => setActiveTab('live')}
+          onMove={moveTab}
         >
-          运行态
+          {t('panel.live')}
         </TabButton>
         <TabButton
           id="cf-tab-templates"
           panelId="cf-panel-templates"
           active={activeTab === 'templates'}
           onClick={() => setActiveTab('templates')}
+          onMove={moveTab}
         >
-          模板库
+          {t('panel.templates')}
         </TabButton>
       </header>
 
@@ -52,7 +64,7 @@ export function CollabFlowPanel({ sessionId }: PanelProps) {
         hidden={activeTab !== 'live'}
         className="cf-panel__body"
       >
-        <LiveView sessionId={sessionId} />
+        <LiveView sessionId={sessionId} remote={remote} t={t} />
       </div>
 
       <div
@@ -62,7 +74,7 @@ export function CollabFlowPanel({ sessionId }: PanelProps) {
         hidden={activeTab !== 'templates'}
         className="cf-panel__body"
       >
-        <TemplateLibrary sessionId={sessionId} />
+        <TemplateLibrary sessionId={sessionId} remote={remote} t={t} />
       </div>
     </div>
   )
@@ -73,23 +85,25 @@ interface TabButtonProps {
   panelId: string
   active: boolean
   onClick: () => void
-  children: React.ReactNode
+  onMove: (direction: 1 | -1) => void
+  children: ReactNode
 }
 
-function TabButton({ id, panelId, active, onClick, children }: TabButtonProps) {
+function TabButton({ id, panelId, active, onClick, onMove, children }: TabButtonProps) {
   return (
     <button
       id={id}
       role="tab"
       aria-selected={active}
       aria-controls={panelId}
+      tabIndex={active ? 0 : -1}
       className={`cf-tab${active ? ' cf-tab--active' : ''}`}
       onClick={onClick}
       // 键盘导航：Tab 间用方向键切换（ARIA tabs pattern）
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
           e.preventDefault()
-          onClick()
+          onMove(e.key === 'ArrowRight' ? 1 : -1)
         }
       }}
     >

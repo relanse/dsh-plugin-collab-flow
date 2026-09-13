@@ -31,7 +31,7 @@ DSH 的 Cordis 插件可以有两个运行环境：
 
 **Client 半边**（浏览器）：注册 UI 组件、slot、sidebar tab。入口是 `src/client/index.ts`，通过 `package.json` 的 `exports["./client"]` 和 `dsh.client` 字段声明。构建产物必须以 `window.__ModuleLoader__.load({ id, factory })` 注册懒加载工厂；DSH 的 `ctx.clientModules` 服务扫描已加载包的 `dsh.client` 字段，自动把 `lib/client.js` 加入 `window.__DSH_BOOT__` 启动图，在页面加载时注入。
 
-两个半边在各自的 Cordis 上下文里运行，通过 Remote API 通信（Host 暴露方法，Client 通过 `window.__dsh_remote__` 调用）。
+两个半边在各自的 Cordis 上下文里运行，通过 Typert Remote 通信。Host 方法使用 `@Remote` 暴露，Client 挂载生成的 `/remote` contribution 后从 `ctx.remote.collab` 读取具体函数。
 
 ---
 
@@ -90,8 +90,8 @@ Cordis 的 `ctx.effect()` 把副作用（注册某个服务/slot）绑定到当�
 
 ---
 
-## 已知限制
+## Remote 与生命周期
 
-**Remote API 调用方式未核实**：`src/client/live-view.tsx` 和 `template-list.tsx` 里用了 `(window as any).__dsh_remote__?.collab` 来调用 Host 的方法。这是推断的调用方式，实际的 Remote 注册和调用约定需要参考 DSH 的 `packages/api/remotes/` 文档。如果 DSH 用的是 `@Remote` 装饰器 + 类型安全的调用方式，这里的代码需要更新。
+Client 入口先执行 `ctx.remote.$mount(generatedRemote)`，再通过 `ctx.inject()` 等待 `remote.collab` 与 UI 服务同时可用。UI 注入失败时按相反顺序释放 UI fiber 和 Remote contribution；插件卸载时同样释放两者，避免残留 namespace 或 slot 注册。
 
-**slot API 字段名未最终核实**：`sidebar.right.pane.tab` slot 名称和 `ctx.sidebarRightTabs.register()` 的参数结构基于文档推断，上线前需对照 `packages/client/` 里的实际 slot 定义确认。
+Remote 方法返回 `RemoteResult<T>`，面板把 `ok: false` 转换为本地错误状态。Remote contribution 本身是构建生成物，运行时不通过全局变量或未声明的 sibling chunk 查找。

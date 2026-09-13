@@ -17,7 +17,7 @@ DSH（DeepSeek Harness）的多 Agent 协作可视化插件。
 本插件需要 DSH Web profile（2026-07 以上版本）。
 
 ```sh
-dsh plugin install @dsh-community/plugin-collab-flow
+dsh plugin --profile web add @dsh-community/plugin-collab-flow
 ```
 
 安装后在 DSH 右侧 sidebar 点击 "Collab Flow" 入口，或通过命令 `openTab('collab-flow')` 打开。
@@ -45,9 +45,14 @@ pnpm run build
 # 类型检查
 pnpm run typecheck
 
-# 加载到 DSH
-dsh --profile web --plugin ./packages/collab-flow
+# 从本地 checkout 加载到 DSH（在 deepseek-harness checkout 中执行）
+# 先在本仓库执行 pnpm run build，再使用 Harness 官方 web 子命令：
+pnpm dsh web --patch /path/to/collab-flow-test/cordis.yml
 ```
+
+`cordis.yml` 通过标准 patch 的 `insert` 行指向已构建的 `lib/index.js`；浏览器侧
+`lib/client.js` 会由 Harness 的 `clientBundle` 预加载并注册为 `__ModuleLoader__` 工厂。
+生产环境建议通过上面的 `dsh plugin ... add` 安装发布包，避免让 profile 依赖本地路径。
 
 ## 项目结构
 

@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { CollabGraph, CollabGraphNode } from '../types.ts'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { CollabRemote } from './remote.ts'
 
 interface LiveViewProps {
   sessionId: string | undefined
+  remote: CollabRemote
+  t: TranslateNS<'collabFlow'>
 }
 
 /**
@@ -11,7 +15,7 @@ interface LiveViewProps {
  * 当前用 1 秒轮询（首版简化），进阶版可改为 DSH Remote stream 推送。
  * token 数据仅对进程内 agent 有效；进程外 claude-code / codex 显示 "—"。
  */
-export function LiveView({ sessionId }: LiveViewProps) {
+export function LiveView({ sessionId, remote, t }: LiveViewProps) {
   const [graph, setGraph] = useState<CollabGraph | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -19,15 +23,17 @@ export function LiveView({ sessionId }: LiveViewProps) {
   const fetchGraph = useCallback(async () => {
     if (!sessionId) return
     try {
-      // Remote API 调用方式待核实（DSH typert 约定）
-      const remote = (window as any).__dsh_remote__?.collab
-      const g: CollabGraph | null = await remote?.getGraph(sessionId)
-      setGraph(g)
+      const result = await remote.getGraph(sessionId)
+      if (!result.ok) {
+        setError(`${result.error.code}: ${result.error.message}`)
+        return
+      }
+      setGraph(result.value)
       setError(null)
-    } catch (e: any) {
-      setError(e.message ?? '加载失败')
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : String(error))
     }
-  }, [sessionId])
+  }, [remote, sessionId])
 
   useEffect(() => {
     if (!sessionId) {
@@ -42,16 +48,16 @@ export function LiveView({ sessionId }: LiveViewProps) {
   }, [sessionId, fetchGraph])
 
   if (!sessionId) {
-    return <EmptyState message="请选择一个会话" />
+    return <EmptyState message={t('session.select')} />
   }
   if (loading && !graph) {
-    return <LoadingSkeleton />
+    return <LoadingSkeleton message={t('loading')} />
   }
   if (error) {
-    return <ErrorState message={error} onRetry={fetchGraph} />
+    return <ErrorState message={error} onRetry={fetchGraph} t={t} />
   }
   if (!graph || graph.nodes.length <= 1) {
-    return <EmptyState message="暂无协作活动" />
+    return <EmptyState message={t('activity.empty')} />
   }
 
   const rootNode = graph.nodes.find(n => n.id === graph.sessionId)
@@ -62,17 +68,17 @@ export function LiveView({ sessionId }: LiveViewProps) {
       <div className="cf-live__summary" aria-live="polite" aria-atomic="true">
         {graph.runningCount > 0 ? (
           <span className="cf-badge cf-badge--running">
-            {graph.runningCount} 个运行中
+            {t('activity.running', { count: graph.runningCount })}
           </span>
         ) : (
-          <span className="cf-badge cf-badge--idle">空闲</span>
+          <span className="cf-badge cf-badge--idle">{t('activity.idle')}</span>
         )}
       </div>
 
       {/* 节点树 */}
-      <div className="cf-tree" role="tree" aria-label="协作图">
+      <div className="cf-tree" role="tree" aria-label={t('activity.tree')}>
         {rootNode && (
-          <NodeTree graph={graph} nodeId={rootNode.id} depth={0} />
+          <NodeTree graph={graph} nodeId={rootNode.id} depth={0} t={t} />
         )}
       </div>
     </div>
@@ -85,9 +91,10 @@ interface NodeTreeProps {
   graph: CollabGraph
   nodeId: string
   depth: number
+  t: TranslateNS<'collabFlow'>
 }
 
-function NodeTree({ graph, nodeId, depth }: NodeTreeProps) {
+function NodeTree({ graph, nodeId, depth, t }: NodeTreeProps) {
   const node = graph.nodes.find(n => n.id === nodeId)
   if (!node) return null
   const children = graph.childrenOf[nodeId] ?? []
@@ -99,11 +106,11 @@ function NodeTree({ graph, nodeId, depth }: NodeTreeProps) {
       aria-expanded={hasChildren ? true : undefined}
       style={{ paddingLeft: depth === 0 ? 0 : 16 }}
     >
-      <NodeCard node={node} />
+      <NodeCard node={node} t={t} />
       {hasChildren && (
         <div role="group">
           {children.map(childId => (
-            <NodeTree key={childId} graph={graph} nodeId={childId} depth={depth + 1} />
+            <NodeTree key={childId} graph={graph} nodeId={childId} depth={depth + 1} t={t} />
           ))}
         </div>
       )}
@@ -113,29 +120,25 @@ function NodeTree({ graph, nodeId, depth }: NodeTreeProps) {
 
 // ── 单个节点卡片 ─────────────────────────────────────────────
 
-const STATUS_LABEL: Record<string, string> = {
-  pending:   '等待中',
-  running:   '运行中',
-  completed: '已完成',
-  cancelled: '已取消',
-  error:     '出错',
+const STATUS_LABEL: Record<string, 'status.pending' | 'status.running' | 'status.completed' | 'status.cancelled' | 'status.error'> = {
+  pending: 'status.pending', running: 'status.running', completed: 'status.completed',
+  cancelled: 'status.cancelled', error: 'status.error',
 }
 
-const PROVIDER_LABEL: Record<string, string> = {
-  'claude-code':        'Claude Code',
-  'codex':              'Codex',
-  'spawn-in-process':   '进程内',
-  'fork-in-process':    'Fork',
-  'dsh-sdk':            'DSH SDK',
+const PROVIDER_LABEL: Record<string, 'provider.claude' | 'provider.codex' | 'provider.spawn' | 'provider.fork' | 'provider.sdk'> = {
+  'claude-code': 'provider.claude', codex: 'provider.codex', 'spawn-in-process': 'provider.spawn',
+  'fork-in-process': 'provider.fork', 'dsh-sdk': 'provider.sdk',
 }
 
 interface NodeCardProps {
   node: CollabGraphNode
+  t: TranslateNS<'collabFlow'>
 }
 
-function NodeCard({ node }: NodeCardProps) {
+function NodeCard({ node, t }: NodeCardProps) {
   const isExternalProvider =
     node.provider === 'claude-code' || node.provider === 'codex'
+  const providerKey = node.provider === undefined ? undefined : PROVIDER_LABEL[node.provider]
 
   return (
     <div
@@ -145,7 +148,7 @@ function NodeCard({ node }: NodeCardProps) {
       {/* 状态指示点（颜色 + aria-label，不只靠颜色） */}
       <span
         className="cf-node__dot"
-        aria-label={STATUS_LABEL[node.status] ?? node.status}
+        aria-label={t(STATUS_LABEL[node.status] ?? 'common.error')}
         role="img"
       />
 
@@ -163,34 +166,34 @@ function NodeCard({ node }: NodeCardProps) {
       {/* Provider 来源徽章 */}
       {node.provider && (
         <span className="cf-node__provider">
-          {PROVIDER_LABEL[node.provider] ?? node.provider}
+          {providerKey === undefined ? node.provider : t(providerKey)}
         </span>
       )}
 
       {/* Token 数据 */}
       {node.tokens ? (
-        <span className="cf-node__tokens" aria-label="token 用量">
+        <span className="cf-node__tokens" aria-label={t('token.aria')}>
           {node.tokens.input.toLocaleString()} / {node.tokens.output.toLocaleString()}
         </span>
       ) : node.kind === 'subagent' && isExternalProvider ? (
         <span
           className="cf-node__tokens cf-node__tokens--na"
-          title="外部进程，DSH 无法观测 token 用量"
-          aria-label="token 数据不可用"
+          title={t('error.externalTokens')}
+          aria-label={t('token.unavailable')}
         >
-          token: —
+          {t('token.unavailable')}
         </span>
       ) : null}
 
       {/* 错误图标 */}
       {node.error && (
-        <span className="cf-node__error-icon" aria-label="出错" role="img">⚠</span>
+        <span className="cf-node__error-icon" aria-label={t('status.error')} role="img">⚠</span>
       )}
 
       {/* 耗时（有结束时间时显示） */}
       {node.endedAt && (
-        <span className="cf-node__duration" aria-label="耗时">
-          {formatDuration(node.endedAt - node.startedAt)}
+        <span className="cf-node__duration" aria-label={t('activity.duration')}>
+          {formatDuration(node.endedAt - node.startedAt, t)}
         </span>
       )}
     </div>
@@ -208,9 +211,9 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-function LoadingSkeleton() {
+function LoadingSkeleton({ message }: { message: string }) {
   return (
-    <div className="cf-skeleton" aria-label="加载中" aria-busy="true">
+    <div className="cf-skeleton" aria-label={message} aria-busy="true">
       <div className="cf-skeleton__row cf-skeleton__row--wide" />
       <div className="cf-skeleton__row" />
       <div className="cf-skeleton__row" />
@@ -221,23 +224,24 @@ function LoadingSkeleton() {
 interface ErrorStateProps {
   message: string
   onRetry: () => void
+  t: TranslateNS<'collabFlow'>
 }
 
-function ErrorState({ message, onRetry }: ErrorStateProps) {
+function ErrorState({ message, onRetry, t }: ErrorStateProps) {
   return (
     <div className="cf-error" role="alert">
-      <p className="cf-error__message">加载失败：{message}</p>
-      <button className="cf-error__retry" onClick={onRetry}>重试</button>
+      <p className="cf-error__message">{t('error.load', { message })}</p>
+      <button className="cf-error__retry" onClick={onRetry}>{t('error.retry')}</button>
     </div>
   )
 }
 
 // ── 工具函数 ─────────────────────────────────────────────────
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+function formatDuration(ms: number, t: TranslateNS<'collabFlow'>): string {
+  if (ms < 1000) return t('activity.duration.ms', { value: ms })
+  if (ms < 60_000) return t('activity.duration.seconds', { value: (ms / 1000).toFixed(1) })
   const m = Math.floor(ms / 60_000)
   const s = Math.floor((ms % 60_000) / 1000)
-  return `${m}m${s}s`
+  return t('activity.duration.minutes', { minutes: m, seconds: s })
 }

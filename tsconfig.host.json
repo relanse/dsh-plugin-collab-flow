@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [{ "path": "packages/collab-flow/tsconfig.host.face.json" }]
+}
