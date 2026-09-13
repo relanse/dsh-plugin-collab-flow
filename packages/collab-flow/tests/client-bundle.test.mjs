@@ -8,6 +8,8 @@ const artifactPath = new URL('../lib/client.js', import.meta.url)
 
 test('client bundle registers a ModuleLoader factory', () => {
   const code = readFileSync(artifactPath, 'utf8')
+  assert.match(code, /\.cf-panel/)
+  assert.doesNotMatch(code, /plugin-collab-flow\/remote/)
   let handoff
   const window = {
     __ModuleLoader__: {
