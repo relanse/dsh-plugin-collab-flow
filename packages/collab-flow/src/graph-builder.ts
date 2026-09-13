@@ -4,27 +4,48 @@ import type { CollabGraphNode, CollabGraph } from './types.ts'
 /**
  * 实时图构建器
  *
- * 职责：监听 workflow/* 和 subagent/* 实时事件，维护按 sessionId
- * 分桶的内存图状态。持久化图状态由 projection.ts 处理，两者叠加
- * 使用：持久图作为 baseline，实时事件叠在上面。
+ * 监听 workflow/* 和 session/event(tool-workflow/*) 实时事件，
+ * 维护按 sessionId 分桶的内存图状态。
  *
- * 限制：进程重启后内存状态丢失，但 projection 会从 session 日志恢复 baseline。
+ * 架构说明：
+ * - workflow/start 等事件里 WorkflowRunInfo 只有 { id, meta }，没有 parentSessionId
+ * - 因此用 session/event 监听 tool-workflow/run-start 来建立
+ *   WorkflowRunId → parentSessionId 的映射（该事件写在父 session 日志里）
+ * - subagent/start 的 SubagentRunInfo 也没有 parentSessionId，
+ *   通过 subagent/catalog (session 事件) 来追踪子 agent 的父 session
+ *
+ * 持久化图状态由 projection.ts 处理，两者叠加使用：
+ * - 持久图（projection）= baseline，进程重启后可恢复
+ * - 实时图（本模块）= 叠加层，更新频率高，进程重启后丢失
  */
 export class GraphBuilder {
-  /**
-   * sessionId → (nodeId → node) 的两层 Map。
-   * 外层 key 是父 session（触发委派的那个 session），
-   * 不是子 agent 自身的 session。
-   */
+  /** sessionId → (nodeId → node) */
   private readonly graphs = new Map<string, Map<string, CollabGraphNode>>()
+  /** WorkflowRunId → parentSessionId，从 session/event 建立 */
+  private readonly runToSession = new Map<string, string>()
+  /** SubagentRunId → parentSessionId，从 subagent/catalog session 事件建立 */
+  private readonly childToParent = new Map<string, string>()
 
   register(ctx: Context): void {
-    // ── workflow 事件 ─────────────────────────────────────────
-    // 注意：所有 workflow/* 事件的 parentSessionId 字段需核实
-    // 实际位置：packages/workflow/workflow/src/types.ts → WorkflowRunInfo
+    // ── session/event：从持久化事件建立映射 ────────────────────
+    // tool-workflow/run-start 写在父 session 日志里，携带 runId 和 name
+    // subagent/catalog 写在父 session 日志里，携带 childId
+    ctx.on('session/event', (session: SessionShape, event: SessionEventShape) => {
+      if (event.type === 'tool-workflow/run-start') {
+        const data = event.data as ToolWorkflowRunStartData
+        this.runToSession.set(data.runId, session.id)
+      }
+      if (event.type === 'subagent/catalog') {
+        const data = event.data as SubagentCatalogData
+        this.childToParent.set(data.childId, session.id)
+      }
+    })
 
+    // ── workflow/* 实时事件 ────────────────────────────────────
     ctx.on('workflow/start', (info: WorkflowRunInfoShape) => {
-      const nodes = this.getOrCreate(info.parentSessionId)
+      const parentSessionId = this.runToSession.get(info.id)
+      if (!parentSessionId) return  // session/event 可能还没到，容忍
+      const nodes = this.getOrCreate(parentSessionId)
       nodes.set(info.id, {
         id: info.id,
         kind: 'workflow-run',
@@ -36,8 +57,9 @@ export class GraphBuilder {
     })
 
     ctx.on('workflow/phase', (info: WorkflowRunInfoShape, title: string) => {
-      const nodes = this.getOrCreate(info.parentSessionId)
-      // phase 以 runId:phase:title 作为节点 id，挂在 workflow-run 节点下
+      const parentSessionId = this.runToSession.get(info.id)
+      if (!parentSessionId) return
+      const nodes = this.getOrCreate(parentSessionId)
       const phaseId = `${info.id}:phase:${title}`
       nodes.set(phaseId, {
         id: phaseId,
@@ -51,15 +73,16 @@ export class GraphBuilder {
     })
 
     ctx.on('workflow/agent-start', (info: WorkflowRunInfoShape, agent: WorkflowAgentInfoShape) => {
-      const nodes = this.getOrCreate(info.parentSessionId)
-      // 如果 agent 有 phase，挂在对应 phase 节点下；否则直接挂在 workflow-run 下
+      const parentSessionId = this.runToSession.get(info.id)
+      if (!parentSessionId) return
+      const nodes = this.getOrCreate(parentSessionId)
       const parentId = agent.phase
         ? `${info.id}:phase:${agent.phase}`
         : info.id
       nodes.set(agent.childId, {
         id: agent.childId,
         kind: 'subagent',
-        label: agent.label ?? `agent-${agent.seq}`,
+        label: agent.label,
         parentId,
         status: 'running',
         startedAt: Date.now(),
@@ -67,43 +90,50 @@ export class GraphBuilder {
     })
 
     ctx.on('workflow/agent-end', (info: WorkflowRunInfoShape, agent: WorkflowAgentEndInfoShape) => {
-      const nodes = this.getOrCreate(info.parentSessionId)
+      const parentSessionId = this.runToSession.get(info.id)
+      if (!parentSessionId) return
+      const nodes = this.getOrCreate(parentSessionId)
       const existing = nodes.get(agent.childId)
       if (!existing) return
       nodes.set(agent.childId, {
         ...existing,
-        status: toNodeStatus(agent.outcome),
+        // WorkflowAgentOutcome: 'completed' | 'failed' | 'cancelled'
+        status: agent.outcome === 'completed' ? 'completed'
+          : agent.outcome === 'cancelled' ? 'cancelled' : 'error',
         endedAt: Date.now(),
-        error: agent.error,
       })
     })
 
     ctx.on('workflow/end', (info: WorkflowRunInfoShape, result: WorkflowResultInfoShape) => {
-      const nodes = this.getOrCreate(info.parentSessionId)
+      const parentSessionId = this.runToSession.get(info.id)
+      if (!parentSessionId) return
+      const nodes = this.getOrCreate(parentSessionId)
       const existing = nodes.get(info.id)
       if (!existing) return
       nodes.set(info.id, {
         ...existing,
-        status: toNodeStatus(result.stopReason),
+        // WorkflowStopReason: 'completed' | 'cancelled' | 'error'
+        status: result.stopReason === 'completed' ? 'completed'
+          : result.stopReason === 'cancelled' ? 'cancelled' : 'error',
         endedAt: Date.now(),
         error: result.error,
       })
+      this.runToSession.delete(info.id)  // 清理映射
     })
 
-    // ── subagent 事件（直接委派，不经过 workflow 引擎）─────────
-    // 注意：SubagentRunInfo 的父 session id 字段名需核实
-    // 实际位置：packages/subagent/subagent/src/types.ts → SubagentRunInfo
-
+    // ── subagent/* 实时事件（非 workflow 路径的直接委派）──────
+    // SubagentRunInfo: { runId, provider, id, local }
+    // 父 session 通过 childToParent 映射（subagent/catalog session 事件建立）
     ctx.on('subagent/start', (info: SubagentRunInfoShape) => {
-      const parentSessionId = resolveParentSessionId(info)
+      const parentSessionId = this.childToParent.get(info.id)
       if (!parentSessionId) return
       const nodes = this.getOrCreate(parentSessionId)
-      // workflow 路径已经由 workflow/agent-start 处理，避免重复
+      // workflow/agent-start 已经处理过 workflow 路径的子 agent，避免重复
       if (nodes.has(info.id)) return
       nodes.set(info.id, {
         id: info.id,
         kind: 'subagent',
-        label: info.label ?? info.provider ?? 'subagent',
+        label: info.provider,
         provider: info.provider,
         parentId: parentSessionId,
         status: 'running',
@@ -112,23 +142,21 @@ export class GraphBuilder {
     })
 
     ctx.on('subagent/end', (info: SubagentRunEndInfoShape) => {
-      const parentSessionId = resolveParentSessionId(info)
+      const parentSessionId = this.childToParent.get(info.id)
       if (!parentSessionId) return
       const nodes = this.getOrCreate(parentSessionId)
       const existing = nodes.get(info.id)
       if (!existing) return
+      // SubagentStopReason: 'completed' | 'aborted' | 'error' | 'max-tokens' | 'refusal'
       nodes.set(info.id, {
         ...existing,
-        status: toNodeStatus(info.result?.stopReason ?? 'error'),
+        status: info.stopReason === 'completed' ? 'completed'
+          : info.stopReason === 'aborted' ? 'cancelled' : 'error',
         endedAt: Date.now(),
       })
     })
   }
 
-  /**
-   * 构建指定 session 的协作图快照。
-   * rootLabel 通常是 session 的标题或 "Session"。
-   */
   buildGraph(sessionId: string, rootLabel = 'Session'): CollabGraph {
     const nodes = this.graphs.get(sessionId) ?? new Map<string, CollabGraphNode>()
 
@@ -142,7 +170,6 @@ export class GraphBuilder {
 
     const nodeArr: CollabGraphNode[] = [rootNode, ...nodes.values()]
 
-    // 构建 parentId → childId[] 索引
     const childrenOf: Record<string, string[]> = {}
     for (const node of nodeArr) {
       if (node.id === sessionId) continue
@@ -155,7 +182,6 @@ export class GraphBuilder {
     return { sessionId, nodes: nodeArr, childrenOf, runningCount, updatedAt: Date.now() }
   }
 
-  /** 清理某个 session 的图状态（session 关闭时调用） */
   clearSession(sessionId: string): void {
     this.graphs.delete(sessionId)
   }
@@ -170,65 +196,70 @@ export class GraphBuilder {
   }
 }
 
-// ── 辅助函数 ─────────────────────────────────────────────────
+// ── 内部形状类型（源码已核实，仅用于本模块内类型推断） ────────
 
-function toNodeStatus(reason: string): import('./types.ts').NodeStatus {
-  if (reason === 'completed') return 'completed'
-  if (reason === 'cancelled') return 'cancelled'
-  return 'error'
-}
-
-/**
- * 从 SubagentRunInfo 中提取父 session id。
- * 字段名需核实 packages/subagent/subagent/src/types.ts。
- * 以下按优先级尝试常见字段名。
- */
-function resolveParentSessionId(info: SubagentRunInfoShape): string | undefined {
-  // 优先用明确的父 session id 字段
-  if (typeof info.parentSessionId === 'string') return info.parentSessionId
-  // 备选：parent agent 对象上的 sessionId
-  if (info.parent && typeof (info.parent as any).sessionId === 'string') {
-    return (info.parent as any).sessionId
-  }
-  return undefined
-}
-
-// ── 临时形状类型（待核实字段名后替换为真实 import type） ──────
-// 这些类型仅在 graph-builder 内部使用，用于规避没有真实包时的编译错误
-// 上线前必须替换为 import type { WorkflowRunInfo } from '@deepseek-ai/dsh-workflow'
-
-interface WorkflowRunInfoShape {
+interface SessionShape {
   id: string
-  parentSessionId: string
+}
+
+interface SessionEventShape {
+  type: string
+  data: unknown
+}
+
+// 来源：packages/workflow/tool-workflow/src/index.ts:119
+// append(session, 'tool-workflow/run-start', { runId: run.id, name: run.meta.name })
+interface ToolWorkflowRunStartData {
+  runId: string
+  name: string
+}
+
+// 来源：packages/subagent/subagent/src/catalog.ts:24-32
+// { version, childId, childCreatedAt, mode, label? }
+interface SubagentCatalogData {
+  childId: string
+  mode: 'one-shot' | 'continuable'
+  label?: string
+}
+
+// 来源：packages/workflow/workflow/src/types.ts:90-95
+interface WorkflowRunInfoShape {
+  id: string  // WorkflowRunId
   meta: { name: string }
 }
 
+// 来源：packages/workflow/workflow/src/types.ts:98-107
+// label 是 string（不是 string | undefined），见源码第 102 行
 interface WorkflowAgentInfoShape {
   seq: number
-  childId: string
-  label?: string
+  label: string
   phase?: string
+  childId: string  // SessionId
 }
 
-interface WorkflowAgentEndInfoShape {
-  childId: string
-  outcome: string
-  error?: string
+// 来源：packages/workflow/workflow/src/types.ts:113-116
+// outcome: WorkflowAgentOutcome = 'completed' | 'failed' | 'cancelled'
+interface WorkflowAgentEndInfoShape extends WorkflowAgentInfoShape {
+  outcome: 'completed' | 'failed' | 'cancelled'
 }
 
+// 来源：packages/workflow/workflow/src/types.ts:124-131
 interface WorkflowResultInfoShape {
-  stopReason: string
+  stopReason: 'completed' | 'cancelled' | 'error'
   error?: string
+  agentsStarted: number
 }
 
+// 来源：packages/subagent/subagent/src/types.ts:80-94
 interface SubagentRunInfoShape {
-  id: string
-  label?: string
-  provider?: string
-  parentSessionId?: string
-  parent?: unknown
+  runId: string
+  provider: string
+  id: string  // SessionId（child）
+  local: boolean
 }
 
+// 来源：packages/subagent/subagent/src/types.ts:100-117
+// stopReason 直接在 info 上，不是嵌套的 result.stopReason
 interface SubagentRunEndInfoShape extends SubagentRunInfoShape {
-  result?: { stopReason: string }
+  stopReason: string  // SubagentStopReason
 }
