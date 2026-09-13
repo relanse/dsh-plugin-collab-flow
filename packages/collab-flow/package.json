@@ -1,7 +1,17 @@
 {
   "name": "@dsh-community/plugin-collab-flow",
+  "description": "实时展示 DSH 多 Agent 协作过程并管理 Workflow 模板",
   "version": "0.1.0",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/relanse/dsh-plugin-collab-flow.git",
+    "directory": "packages/collab-flow"
+  },
+  "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
