@@ -54,7 +54,7 @@ dsh --profile web --plugin ./packages/collab-flow
 ```
 packages/collab-flow/src/
   index.ts           # Host 入口
-  client.ts          # Client 入口（注册 sidebar tab）
+  client/index.ts    # Client 入口（注册 sidebar tab）
   types.ts           # Host/Client 共享类型（JSON-safe）
   projection.ts      # DSH SessionProjection 折叠单元
   graph-builder.ts   # 实时图构建器

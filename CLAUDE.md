@@ -131,9 +131,11 @@ interface SubagentRunEndInfo extends SubagentRunInfo {
 
 ### Client 模块格式
 
-`package.json` 里声明 `dsh.client: "./client"` 和 `exports["./client"]` 即可。
-DSH 会自动扫描并处理 bundle 路由，不需要手写 `window.__ModuleLoader__` 包装。
-tsdown.config.ts 的 client 侧只需要普通 CJS/ESM 输出，DSH 的 `ctx.clientModules` 服务负责注入。
+`package.json` 里声明 `dsh.client: { "platform": "web", "inject": [] }` 和
+`exports["./client"]`。客户端构建产物必须是 Harness 的懒加载 CJS 工厂格式：
+`window.__ModuleLoader__.load({ id, factory })`，并固定输出到 `lib/client.js`。
+`ctx.clientModules` 负责扫描、组合和路由这些已注册的工厂，但不会把普通 CJS
+导出转换为 ModuleLoader 工厂。
 
 ---
 

@@ -24,7 +24,7 @@
 |---|---|---|
 | [01-session-projection.md](./01-session-projection.md) | `src/projection.ts` | DSH SessionProjection 纯折叠、水位线缓存、引用同一性优化 |
 | [02-graph-builder.md](./02-graph-builder.md) | `src/graph-builder.ts` | 双图叠加架构、workflow 事件没有 parentSessionId 的解法 |
-| [03-slots.md](./03-slots.md) | `src/client.ts` | Cordis 双半边插件、DSH Slot 机制、UI 注入 |
+| [03-slots.md](./03-slots.md) | `src/client/index.ts` | Cordis 双半边插件、DSH Slot 机制、UI 注入 |
 
 ## 待写文档
 

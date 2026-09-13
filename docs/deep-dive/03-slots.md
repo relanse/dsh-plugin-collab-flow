@@ -1,6 +1,6 @@
 # DSH Slot 机制与 UI 注入
 
-> 对应代码：`packages/collab-flow/src/client.ts`
+> 对应代码：`packages/collab-flow/src/client/index.ts`
 > 面试追问见 `private_doc/interview/03-slots-qa.md`
 
 ---
@@ -29,7 +29,7 @@ DSH 的 Cordis 插件可以有两个运行环境：
 
 **Host 半边**（Node.js 进程）：注册服务、监听事件、访问文件系统和数据库。入口是 `src/index.ts`，导出 `name / inject / apply`，通过 `package.json` 的 `main` 字段加载。
 
-**Client 半边**（浏览器）：注册 UI 组件、slot、sidebar tab。入口是 `src/client.ts`，通过 `package.json` 的 `exports["./client"]` 和 `dsh.client` 字段声明。DSH 的 `ctx.clientModules` 服务扫描已加载包的 `dsh.client` 字段，自动把 client bundle 加入 `window.__DSH_BOOT__` 启动图，在页面加载时注入。
+**Client 半边**（浏览器）：注册 UI 组件、slot、sidebar tab。入口是 `src/client/index.ts`，通过 `package.json` 的 `exports["./client"]` 和 `dsh.client` 字段声明。构建产物必须以 `window.__ModuleLoader__.load({ id, factory })` 注册懒加载工厂；DSH 的 `ctx.clientModules` 服务扫描已加载包的 `dsh.client` 字段，自动把 `lib/client.js` 加入 `window.__DSH_BOOT__` 启动图，在页面加载时注入。
 
 两个半边在各自的 Cordis 上下文里运行，通过 Remote API 通信（Host 暴露方法，Client 通过 `window.__dsh_remote__` 调用）。
 
@@ -58,7 +58,7 @@ ctx.slots.inject('sidebar.right.pane.tab', () =>
       name: 'sidebar.right.pane.tab',
       key: '@dsh-community/collab-flow',  // key 匹配上面注册的 id
     },
-    () => import('./client/panel.tsx').then(m => m.CollabFlowPanel),
+    CollabFlowPanel,
   )
 )
 ```
@@ -78,13 +78,15 @@ Cordis 的 `ctx.effect()` 把副作用（注册某个服务/slot）绑定到当�
 
 ---
 
-## Client 组件的懒加载
+## Client 组件的打包
 
-```typescript
-() => import('./client/panel.tsx').then(m => m.CollabFlowPanel)
-```
+`src/client/index.ts` 静态导入面板组件，客户端构建将其与运行态视图、模板库和 CSS
+合并为一个 `lib/client.js`。这是官方 client-modules 的发布约定：bundle 执行时只向
+`window.__ModuleLoader__` 注册工厂，模块主体在 Harness 物化工厂时运行。插件不能依赖
+额外的未经注册 chunk 路径。
 
-DSH 的 slot 系统支持传工厂函数而不是直接传组件。这样 `panel.tsx` 和它的依赖（live-view、template-list 等）只在用户第一次打开这个面板时才加载，不影响 DSH 的首屏加载时间。
+面板组件仍然只在对应 slot 被渲染时才执行，bundle 本身只完成工厂注册，不会提前运行
+面板副作用。
 
 ---
 

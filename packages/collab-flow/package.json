@@ -11,13 +11,14 @@
       "default": "./lib/index.js"
     },
     "./client": {
-      "types": "./lib/types/client.d.ts",
-      "default": "./lib/client.cjs"
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
     }
   },
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/client.js.map",
     "lib/types/**/*.d.ts"
   ],
   "dsh": {
@@ -28,6 +29,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "test": "pnpm run build && node --test tests/client-bundle.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json --skipLibCheck",
     "lint": "oxlint src"
   },
