@@ -25,24 +25,14 @@
   },
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "oxlint src"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^1.0.0"
+    "@deepseek-ai/cordis": "^4.0.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^1.0.0",
-    "@deepseek-ai/dsh-agent": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-storage": "workspace:*",
-    "@deepseek-ai/dsh-storage-domain": "workspace:*",
-    "@deepseek-ai/dsh-subagent": "workspace:*",
-    "@deepseek-ai/dsh-token-meter": "workspace:*",
-    "@deepseek-ai/dsh-workflow": "workspace:*",
+    "@deepseek-ai/cordis": "^4.0.2",
     "@types/react": "^18.3.0",
     "react": "^18.3.0",
     "tsdown": "^0.12.0",
