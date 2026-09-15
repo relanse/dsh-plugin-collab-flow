@@ -4,15 +4,15 @@
 
 ## 阶段状态
 
-| 阶段 | 内容 | 状态 | PR |
+| 阶段 | 内容 | 状态 | 交付记录 |
 |---|---|---|---|
-| M0 | 独立构建、CLI 协议验证、持久化契约 | 已完成，PR 待评审 | [#1](https://github.com/relanse/dsh-plugin-collab-flow/pull/1) |
-| M1 | 独立 provider 包、单次运行、静态配置、资源清理 | 待开始 | — |
+| M0 | 独立构建、CLI 协议验证、持久化契约 | 已完成并合并 | [#1](https://github.com/relanse/dsh-plugin-collab-flow/pull/1) |
+| M1 | 独立 provider 包、单次运行、静态配置、资源清理 | 已完成 | `675957c` |
 | M2 | 真实 DSH 委派、父会话关联与外部节点展示 | 待开始 | — |
 | M3 | 可归因 usage、持久化记录与图合并、重启恢复 | 待开始 | — |
 | M4 | 安装/卸载、兼容性回归、发布文档 | 待开始 | — |
 
-交付约定：每个阶段独立中文 Conventional Commit、独立 PR，并在该 PR 中更新本文件。尚未合并的阶段依赖需要在后续 PR 中明确说明。
+交付约定（2026-09-15 更新）：已获得上游写权限。M1 起按功能边界使用中文 Conventional Commits，完成验收后直接提交 origin/main，不再为后续阶段创建 PR；每阶段同步更新本文件。
 
 M0 实现提交：`cc9cf57`；分支：`codex/m0-build-and-cli-spike`。通过个人 fork 向上游提交 PR。
 
@@ -41,6 +41,34 @@ M0 实现提交：`cc9cf57`；分支：`codex/m0-build-and-cli-spike`。通过�
 
 本阶段验证平台为 Windows，OpenCode 1.18.30、DSH 0.1.5-rc.2、Node 22.22.2。完整 DSH Web 联调及进程重启恢复仍在 M2/M3。
 
+
+M1 功能提交：`675957c`（OpenCode 单次委派与受管生命周期）。
+
+## M1 完成内容
+
+- 新增 packages/subagent-cli 独立 Host 包、Bundle patch、Schemastery 配置及标准 SubagentProvider。
+- 复用 DSH subprocess、deadline、settleRunResult、subprocessRunHandle；加载插件时不启动进程。
+- prompt 使用 stdin，默认禁用 CLI 工具与外部插件；权限自动批准只能通过部署配置显式开启。
+- 实现有界 UTF-8/JSONL 解码、最终文本选择、跨会话校验和步骤用量去重，保留未知/部分统计。
+- 明确发布前 reject 与发布后 result 结算的边界；覆盖取消、超时、进程故障、超限及幂等清理。
+- 提供带父会话、标签、CLI 身份和安全诊断的运行观察回调，供 M2/M3 接入；本阶段不写父日志或持久化记录。
+- 增加 35 项协议、生命周期和真实 DSH 子进程测试；原 collab-flow 的 10 项测试保持通过。
+- 为原生后端的三个已检查依赖配置限定构建允许列表，冻结 lockfile 可复现安装。
+
+## M1 验收记录
+
+| 检查 | 结果 |
+|---|---|
+| pnpm clean → pnpm test | 全仓库冷构建通过，45 项测试通过 |
+| pnpm typecheck / pnpm lint | 全仓库通过 |
+| 真实 DSH 子进程后端 | stdin 文本完整传递；敏感环境名和父 DSH 身份没有隐式转发 |
+| Windows 取消 | CLI 主进程及其后代均在 dispose 完成后退出 |
+| 真实 OpenCode provider | 返回 COLLAB_M1_OK；CLI 自报 input=3653、output=7、total=3660 |
+| pnpm install --frozen-lockfile | 通过 |
+| pnpm pack | 发布包 20 个文件；Host 入口、类型及 patch 齐全，不含测试脚本或私有资料 |
+
+真实 provider 验证经 DSH LocalSubprocessRuntime 调用 OpenCode，使用临时目录与禁用工具配置。DSH 模型侧工具调用和 Web 界面联调属于 M2；用量持久化及重启恢复属于 M3。
+
 ## 已确定的后续约束
 
 1. 在 packages/subagent-cli 新建独立 Host 包，首版只实现单次调用，不声明 prepareContinuable。
@@ -57,3 +85,5 @@ M0 实现提交：`cc9cf57`；分支：`codex/m0-build-and-cli-spike`。通过�
 
 - [OpenCode JSON 事件验证](./opencode-json-events.md)
 - [独立构建深挖](../deep-dive/06-standalone-build.md)
+- [CLI provider 生命周期深挖](../deep-dive/07-subagent-cli.md)
+- [CLI provider 配置与开发说明](../../packages/subagent-cli/README.md)
