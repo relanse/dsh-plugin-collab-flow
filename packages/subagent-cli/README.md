@@ -1,0 +1,82 @@
+# @dsh-community/plugin-subagent-cli
+
+DSH 的 OpenCode 单次子 agent provider。M1 已实现配置、受管进程、JSONL 解析、超时取消和运行观察回调；协作图接入与持久化分别在 M2/M3。
+
+验证基线：DSH 0.1.5-rc.2、OpenCode 1.18.30、Node 22.22.2、Windows。包使用宿主已有的 OpenCode，不附带 CLI 或登录凭据。
+
+## 开发与验证
+
+~~~powershell
+pnpm install --frozen-lockfile
+pnpm --filter @dsh-community/plugin-subagent-cli build
+pnpm --filter @dsh-community/plugin-subagent-cli test
+pnpm --filter @dsh-community/plugin-subagent-cli probe --model provider/model --executable D:/path/to/opencode.exe
+~~~
+
+probe 使用真实 DSH LocalSubprocessRuntime，在临时目录中禁用工具，要求 CLI 返回固定文本。它是显式运行的集成验证，不属于默认测试套件；默认测试使用 M0 录制的样本、假进程和真实 Node 子进程。
+
+## 加载与工具配置
+
+本阶段未发布 npm 版本。源码构建后，可在专用测试 profile 的 patch 中插入本地 Host 入口（将路径和模型替换为实际配置）：
+
+~~~yaml
+- insert:
+    - id: subagent-cli
+      name: D:/path/to/dsh-plugin-collab-flow/packages/subagent-cli/lib/index.js
+      config:
+        name: opencode-cli
+        executable: D:/path/to/opencode.exe
+        model: provider/model
+        permissionMode: deny
+        timeoutMs: 120000
+~~~
+
+模型侧工具放入 Agent Preset：
+
+~~~yaml
+- id: tool-subagent-cli
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: opencode-cli
+    toolName: subagent_cli
+    maxDepth: provider-managed
+    backgroundMode: one-shot
+    enableRunInBackground: false
+~~~
+
+加载 provider 只注册服务，不会启动进程。完整 Web profile 的配置与界面验收属于 M2。
+
+## 配置
+
+| 字段 | 默认值 | 含义 |
+|---|---|---|
+| name | opencode-cli | DSH provider 注册名；多实例使用不同名称 |
+| executable | opencode | 宿主可执行文件路径或 PATH 名称；Windows 已验证原生 exe |
+| cwd | 未设置 | 默认读取父 Session 的 header.cwd，缺失时报错 |
+| model | 未设置 | 可选的静态 provider/model；未指定时使用 CLI 原生配置，建议显式选择已启用的路由 |
+| variant | 未设置 | 静态推理档位参数 |
+| permissionMode | deny | deny 禁用工具；auto 显式启用 CLI --auto，同时保留原生明确拒绝规则 |
+| pure | true | 默认关闭 OpenCode 外部插件；依赖插件的部署需显式关闭该选项 |
+| timeoutMs | 120000 | 覆盖可执行文件解析、输入和执行的总超时 |
+| graceMs | 1000 | 交给 DSH subprocess 的进程终止宽限期 |
+
+权限配置和命令参数由部署决定，模型不能覆写 executable、环境变量或权限模式。prompt 只通过 stdin 传递。官方 subprocess 会清理父进程的敏感环境名；原生 CLI 配置/登录文件仍由 OpenCode 管理。
+
+## 程序化组合
+
+createOpenCodeProvider({ subprocess, observe? }, config) 返回标准 SubagentProvider。observe 接收 started/settled 记录，包含本次 run 身份、父会话、标签、终态和可选 CLI 用量。
+
+DSH 的 run.id 与 OpenCode 的 externalSessionId 是不同身份。SubagentResult 只返回最终文本和安全诊断，usage 通过观察回调提供，不伪造原生 subagent/catalog 或父日志事件。
+
+观察回调不是持久化确认机制；异常被隔离，不改变任务结果。异步存储、重启恢复及 UI 合并由后续阶段实现。
+
+## 运行语义
+
+- 仅接受非空文本 prompt；其他内容类型在创建进程前拒绝。
+- 发布前失败会完成已分配资源的清理并 reject start()。发布后的 result 始终解析为 SubagentResult。
+- 用户取消与 dispose() 映射为 aborted；插件自身超时映射为 error。非零退出码不能单独用于判断取消。
+- dispose() 幂等，并等待 DSH 确认受管进程范围已退出；无法确认清理时会报告 cleanup-failed。
+- 默认总 stdout 上限 4 MiB，单行上限 1 MiB，stderr 上限 256 KiB，prompt 上限 256 KiB。stderr 仅计数并丢弃。
+- 正常退出、已知终态和非空最终文本共同决定成功。工具步骤完成事件不能提前结束整个 run。
+- usage 按 message/step 身份去重；缺少 input/output/total 或未观察到最终状态时不会伪造完整统计。complete 只说明这三个计数的覆盖情况；缓存和 reasoning 数字独立保留，仍可能未知。
+- 不声明 prepareContinuable 或额外启动能力。移除 provider 只阻止新调用；已发布 run 仍由原持有方管理。

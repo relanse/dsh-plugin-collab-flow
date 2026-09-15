@@ -28,3 +28,4 @@
 | [04-storage-domain.md](./04-storage-domain.md) | `src/template-store.ts` | Storage Domain 声明、schema 校验、KV 持久化 |
 | [05-remote-api.md](./05-remote-api.md) | `src/index.ts`、`src/client/index.ts` | Typert Remote 生成、挂载和生命周期 |
 | [06-standalone-build.md](./06-standalone-build.md) | `tsdown.config.ts`、Host/Client tsconfig | 独立构建、Remote 生成与 ModuleLoader 工厂 |
+| [07-subagent-cli.md](./07-subagent-cli.md) | `packages/subagent-cli/src/` | CLI 协议解析、单次运行所有权与受管清理 |

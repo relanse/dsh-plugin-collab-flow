@@ -64,6 +64,10 @@ pnpm dsh web --patch /path/to/collab-flow-test/cordis.yml
 `lib/client.js` 会由 Harness 的 `clientBundle` 预加载并注册为 `__ModuleLoader__` 工厂。
 生产环境建议通过上面的 `dsh plugin ... add` 安装发布包，避免让 profile 依赖本地路径。
 
+## CLI 子 agent provider
+
+M1 新增独立包 [packages/subagent-cli](./packages/subagent-cli/README.md)，支持受管 OpenCode 单次委派、超时取消、输出解析和运行观察回调。协作图与持久化接入将在 M2/M3 完成。
+
 ## 项目结构
 
 ```
