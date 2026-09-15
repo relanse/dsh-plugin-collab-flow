@@ -6,13 +6,23 @@
   "scripts": {
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
-    "lint": "pnpm -r run lint",
-    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint && oxlint scripts",
+    "test": "pnpm -r run test && pnpm run test:release",
     "clean": "node scripts/clean.mjs",
-    "probe:opencode": "node scripts/probe-opencode.mjs"
+    "probe:opencode": "node scripts/probe-opencode.mjs",
+    "test:release": "node --test scripts/tests/*.test.mjs",
+    "release:check": "pnpm run clean && pnpm run test && pnpm run typecheck && pnpm run lint && pnpm run release:pack",
+    "release:pack": "node scripts/verify-release.mjs",
+    "test:install": "node scripts/verify-install.mjs"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "tar": "7.5.22",
+    "js-yaml": "4.2.0",
+    "oxlint": "1.76.0"
   },
-  "packageManager": "pnpm@11.21.0"
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22.23.1"
+  }
 }

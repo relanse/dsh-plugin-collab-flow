@@ -159,3 +159,7 @@ createRunStore 仍是显式使用的 version=1 内存工具；新插件要求持
 仅支持 one-shot，不声明 prepareContinuable 或后台继续能力。发布前失败 reject start()；发布后的 result 始终解析为安全 SubagentResult。用户取消和 dispose 对应 aborted，自身工作超时对应 error。dispose 幂等并等待进程清理及终态结果，清理失败停止接纳新任务。
 
 共享上限：stdout 4 MiB、每行 1 MiB、stderr 与 stdin 各 256 KiB。自定义解析器无法绕过共享字节限额。observe 只接收 started/settled，异常被隔离；journal 是独立、必须等待的持久化契约。
+
+## M4 发行验收
+
+仓库的 pnpm release:check 会检查两个真实 tgz 的入口、类型、Bundle、固定 DSH 版本及文件白名单。pnpm test:install 在独立 DSH_HOME 中验证安装、重启、卸载和重装。移除 provider 不接管已发布的 run；先等待或取消任务，再停止 profile 和卸载。领域数据保留，重装可恢复。完整步骤见仓库 docs/release/README.md。

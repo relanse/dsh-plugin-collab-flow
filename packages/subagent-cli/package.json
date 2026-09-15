@@ -35,11 +35,12 @@
   },
   "files": [
     "lib/*.js",
-    "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "README.md",
-    "examples"
+    "examples",
+    "lib/types/types.js",
+    "lib/types/adapter.js"
   ],
   "dsh": {
     "bundle": {
@@ -77,5 +78,8 @@
     "typescript": "^6.0.3",
     "@deepseek-ai/dsh-storage-domain": "0.1.5-rc.2",
     "@deepseek-ai/dsh-storage-json": "0.1.5-rc.2"
+  },
+  "engines": {
+    "node": ">=22.23.1"
   }
 }

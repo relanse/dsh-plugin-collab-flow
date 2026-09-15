@@ -14,10 +14,12 @@ DSH（DeepSeek Harness）的多 Agent 协作可视化插件。
 
 ## 安装
 
-本插件需要 DSH Web profile（2026-07 以上版本）。
+已验证 DSH 0.1.5-rc.2、Node 22.23.1、Windows x64。当前仓库提供本地 0.1.0 发行包；本地打包不代表已发布到 npm。
 
 ```sh
-dsh plugin --profile web add @dsh-community/plugin-collab-flow
+pnpm install --frozen-lockfile
+pnpm release:check
+dsh plugin --profile web add D:/path/to/repo/dist/dsh-community-plugin-collab-flow-0.1.0.tgz
 ```
 
 安装后在 DSH 右侧 sidebar 点击 "Collab Flow" 入口，或通过命令 `openTab('collab-flow')` 打开。
@@ -25,9 +27,7 @@ dsh plugin --profile web add @dsh-community/plugin-collab-flow
 ## 前提条件
 
 - 使用 Claude Code / Codex 子 agent 时，需要在 DSH profile 中启用对应的 provider
-- workflow 模板功能需要 DSH profile 启用 `workflowEngine`；Web profile 若将
-  `workflow-worker-thread` 或 `tool-workflow` 标记为 disabled，需要在 patch 中显式启用
-  这两个行（否则模板库仍可打开，但运行按钮会失败）
+- 查看协作图与管理模板不需要工作流引擎；运行模板时需在 profile patch 中启用 `workflow-worker-thread`。模型是否拥有工作流或委派工具，仍由 Agent Preset 决定
 
 ## 已知限制
 
@@ -62,7 +62,9 @@ pnpm dsh web --patch /path/to/collab-flow-test/cordis.yml
 
 `cordis.yml` 通过标准 patch 的 `insert` 行指向已构建的 `lib/index.js`；浏览器侧
 `lib/client.js` 会由 Harness 的 `clientBundle` 预加载并注册为 `__ModuleLoader__` 工厂。
-生产环境建议通过上面的 `dsh plugin ... add` 安装发布包，避免让 profile 依赖本地路径。
+使用上面的 `dsh plugin ... add` 安装已打出的 tgz。完整安装、卸载、回滚和兼容说明见 [发行指南](./docs/release/README.md)。
+
+`pnpm release:check` 是本地与 CI 共用门禁；已安装固定版本 DSH 后，可运行 `pnpm test:install --dsh-cli D:/tools/dsh/lib/bin.js` 验证独立 profile 的安装、重启、卸载和重装。
 
 ## CLI 子 agent provider
 

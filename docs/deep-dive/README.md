@@ -32,3 +32,4 @@
 | [08-cli-graph-and-guards.md](./08-cli-graph-and-guards.md) | CLI guard/runs、external-runs、live-view | 叶子委派、防循环、运行记录与图合并 |
 | [09-cli-harness-adapters.md](./09-cli-harness-adapters.md) | CLI adapters/provider/run | 多执行器协议、扩展接口与统一叶子防护 |
 | [10-cli-run-persistence.md](./10-cli-run-persistence.md) | CLI runs/run-record/journal | 确认写入、重启修复与历史恢复 |
+| [11-release-verification.md](./11-release-verification.md) | release/install verifier、Bundle 与 client entry | 发行契约、可选引擎、真实安装生命周期 |

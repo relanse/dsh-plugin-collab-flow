@@ -39,3 +39,6 @@ pnpm-debug.log*
 *.tmp
 *.temp
 tmp-enable-workflow.yml
+
+# 本地发行验收产物
+/dist/
