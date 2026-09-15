@@ -47,12 +47,16 @@ test('self-parent records and identity changes are rejected',()=>{
 
 test('record service is scoped and disappears on plugin disposal',async()=>{
   const ctx=new Context()
+  const table = new Map()
+  let domainClosed = false
+  ctx.provide('storageDomain', { async open() { return { table: () => ({ entries: () => table.entries(), put: async (key, value) => { table.set(key, value) } }), close: async () => { domainClosed = true } } } })
   const fiber=ctx.plugin(runsPlugin)
   await fiber
   const store=ctx.get('subagentCliRuns')
-  store.record(started())
+  await store.record(started())
   await fiber.dispose()
   assert.equal(ctx.get('subagentCliRuns'),undefined)
-  store.record(ended())
+  await assert.rejects(store.record(ended()))
+  assert.equal(domainClosed,true)
   assert.equal(store.list('parent').length,0)
 })

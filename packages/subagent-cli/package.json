@@ -1,6 +1,6 @@
 {
   "name": "@dsh-community/plugin-subagent-cli",
-  "description": "通过受管 OpenCode CLI 执行 DSH 单次子 agent 委派",
+  "description": "通过受管多 harness CLI 执行 DSH 单次叶子委派并持久化运行记录",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -27,15 +27,19 @@
     "./runs": {
       "types": "./lib/types/runs.d.ts",
       "default": "./lib/runs.js"
+    },
+    "./adapter": {
+      "types": "./lib/types/adapter.d.ts",
+      "default": "./lib/types/adapter.js"
     }
   },
   "files": [
-    "lib/index.js",
-    "lib/runs.js",
+    "lib/*.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "examples"
   ],
   "dsh": {
     "bundle": {
@@ -53,11 +57,13 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-subagent": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-subprocess": "0.1.5-rc.2"
+    "@deepseek-ai/dsh-subprocess": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-storage-domain": "0.1.5-rc.2"
   },
   "dependencies": {
     "@deepseek-ai/dsh-timeout": "0.1.5-rc.2",
-    "@deepseek-ai/schemastery": "3.18.2"
+    "@deepseek-ai/schemastery": "3.18.2",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
@@ -68,6 +74,8 @@
     "@types/node": "^22.0.0",
     "oxlint": "1.76.0",
     "tsdown": "^0.22.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@deepseek-ai/dsh-storage-domain": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-storage-json": "0.1.5-rc.2"
   }
 }

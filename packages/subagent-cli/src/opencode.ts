@@ -126,6 +126,7 @@ export function createOpenCodeTranscript(limits: ProtocolLimits = DEFAULT_LIMITS
     if (sessionId !== undefined && sessionId !== session) throw new CliFailure('session-mismatch')
     sessionId = session
     const part = record(event.part)
+    if (event.type === 'tool_use' && part.tool === 'task') throw new CliFailure('nested-delegation')
     const expectedType = event.type === 'step_start' ? 'step-start' : event.type === 'step_finish' ? 'step-finish' : event.type === 'tool_use' ? 'tool' : 'text'
     if (part.type !== expectedType || count(event.timestamp) === undefined) throw new CliFailure('invalid-event')
     if (identity(part.sessionID) !== session) throw new CliFailure('session-mismatch')

@@ -1,72 +1,119 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { CliRunEvent, CliRunRecord, CliRunServiceKey, CliRunStore, CliUsage } from './types.ts'
+import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
+import type { CliRunEvent, CliRunRecord, CliRunServiceKey, CliRunStore, PersistentCliRunStore } from './types.ts'
+import { activeRecord, cloneRecord, foldRun, runRecordSchema } from './run-record.ts'
+import { boundedStorage, STORAGE_TIMEOUT_MS } from './journal.ts'
+import { CliFailure } from './failure.ts'
 
 export const RUN_SERVICE: CliRunServiceKey = 'subagentCliRuns'
 export const name = 'subagent-cli/runs'
+export const inject = ['storageDomain']
+export const runDomainSpec = defineDomain({
+  name: 'subagent_cli_runs', version: 1, layout: 'per-record',
+  tables: { runs: domainTable<string, CliRunRecord>(runRecordSchema) },
+})
 
-function validCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-}
-function validId(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= 512
-}
-function clone(record: CliRunRecord): CliRunRecord {
-  return { ...record, ...(record.usage === undefined ? {} : { usage: { ...record.usage } }) }
-}
-function usageSnapshot(value: CliUsage | undefined): CliUsage | undefined {
-  if (value === undefined || value === null || typeof value !== 'object' || ![value.input, value.output, value.total, value.reportedSteps, value.observedSteps].every(validCount) || value.reportedSteps > value.observedSteps) return undefined
-  const result: CliUsage = {
-    input: value.input, output: value.output, total: value.total,
-    reportedSteps: value.reportedSteps, observedSteps: value.observedSteps,
-    complete: value.complete === true && value.reportedSteps === value.observedSteps,
-  }
-  for (const key of ['reasoning', 'cacheRead', 'cacheWrite'] as const) if (validCount(value[key])) result[key] = value[key]
-  return result
+function ordered(records: Iterable<CliRunRecord>, parent: string): CliRunRecord[] {
+  return [...records].filter(value => value.parentSessionId === parent).sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))
 }
 
 export function createRunStore(retainedCompleted = 200): CliRunStore {
   if (!Number.isSafeInteger(retainedCompleted) || retainedCompleted < 0) throw new Error('invalid run retention limit')
   const records = new Map<string, CliRunRecord>()
   let closed = false
-  function record(event: CliRunEvent): void {
-    if (closed) return
-    if ((event.type !== 'started' && event.type !== 'settled') || !validId(event.id) || !validId(event.parentSessionId) || !validId(event.provider) || event.id === event.parentSessionId || !validCount(event.startedAt)) throw new Error('subagent-cli: invalid-run-event')
-    const previous = records.get(event.id)
-    if (previous !== undefined && (previous.parentSessionId !== event.parentSessionId || previous.provider !== event.provider)) throw new Error('subagent-cli: run-identity-mismatch')
-    if (event.type === 'started' && previous !== undefined) return
-    const next: CliRunRecord = {
-      id: event.id, parentSessionId: event.parentSessionId, provider: event.provider,
-      startedAt: previous?.startedAt ?? event.startedAt, status: 'running',
-      ...(typeof event.label === 'string' ? { label: event.label.slice(0,512) } : previous?.label === undefined ? {} : { label: previous.label }),
-    }
-    if (event.type === 'settled') {
-      if (!validCount(event.endedAt)) throw new Error('subagent-cli: invalid-run-event')
-      if (previous?.endedAt !== undefined && event.endedAt < previous.endedAt) return
-      next.status = event.stopReason === 'completed' ? 'completed' : event.stopReason === 'aborted' ? 'cancelled' : 'error'
-      next.endedAt = Math.max(next.startedAt, event.endedAt)
-      if (validId(event.externalSessionId)) next.externalSessionId = event.externalSessionId
-      if (typeof event.diagnostic === 'string') next.diagnostic = event.diagnostic.slice(0,4096)
-      const candidate = usageSnapshot(event.usage)
-      const usage = previous?.usage?.complete && !candidate?.complete ? previous.usage : candidate ?? previous?.usage
-      if (usage !== undefined) next.usage = usage
-    }
-    records.delete(event.id)
-    records.set(event.id,next)
-    let completed = [...records.values()].filter(value => value.status !== 'running').length
-    for (const [id,value] of records) {
-      if (completed <= retainedCompleted) break
-      if (value.status !== 'running') { records.delete(id); completed-- }
-    }
-  }
   return {
-    version: 1, record,
-    list: parentSessionId => [...records.values()].filter(value => value.parentSessionId === parentSessionId).sort((a,b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id)).map(clone),
-    close: () => { closed = true; records.clear() },
+    version: 1,
+    record(event) {
+      if (closed) return
+      const next = foldRun(event, records.get(event.id))
+      records.delete(next.id); records.set(next.id, next)
+      let completed = [...records.values()].filter(value => !activeRecord(value)).length
+      for (const [id, value] of records) {
+        if (completed <= retainedCompleted) break
+        if (!activeRecord(value)) { records.delete(id); completed-- }
+      }
+    },
+    list: parent => ordered(records.values(), parent).map(cloneRecord),
+    close() { closed = true; records.clear() },
   }
 }
 
-export function apply(ctx: Context): void {
-  const store = createRunStore()
-  ctx.provide(RUN_SERVICE,store)
-  ctx.effect(() => () => store.close(), 'close CLI run observations')
+export interface RunTable {
+  entries(): IterableIterator<[string, CliRunRecord]>
+  put(key: string, value: CliRunRecord): Promise<void>
+}
+export interface PersistentStoreOptions {
+  historyLimit?: number
+  ioTimeoutMs?: number
+  now?: () => number
+  close?: () => Promise<void>
+}
+
+export async function createPersistentRunStore(table: RunTable, options: PersistentStoreOptions = {}): Promise<PersistentCliRunStore> {
+  const limit = options.historyLimit ?? 200, timeout = options.ioTimeoutMs ?? STORAGE_TIMEOUT_MS
+  if (!Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60000) throw new Error('invalid run store options')
+  const records = new Map<string, CliRunRecord>()
+  let failed = false, closed = false, chain = Promise.resolve(), closing: Promise<void> | undefined
+  for (const [key, value] of table.entries()) {
+    const record = runRecordSchema.parse(value)
+    if (record.id !== key) throw new CliFailure('persistence-failed')
+    records.set(key, record)
+  }
+  async function put(record: CliRunRecord): Promise<void> {
+    const validated = runRecordSchema.parse(record)
+    await boundedStorage(() => table.put(validated.id, validated), timeout)
+    records.set(validated.id, cloneRecord(validated))
+  }
+  for (const record of records.values()) {
+    if (!activeRecord(record)) continue
+    await put({ ...record, status: 'error', endedAt: Math.max(record.startedAt, (options.now ?? Date.now)()),
+      diagnostic: 'subagent-cli: interrupted-by-restart',
+      ...(record.usage === undefined ? {} : { usage: { ...record.usage, complete: false } }),
+    })
+  }
+  const flush = async (): Promise<void> => { await chain; if (failed) throw new CliFailure('persistence-failed') }
+  return {
+    version: 2,
+    record(event: CliRunEvent) {
+      if (closed || failed) return Promise.reject(new CliFailure('persistence-failed'))
+      let snapshot: CliRunEvent
+      try { snapshot = structuredClone(event) } catch { return Promise.reject(new CliFailure('persistence-failed')) }
+      const task = chain.then(async () => {
+        if (failed) throw new CliFailure('persistence-failed')
+        await put(foldRun(snapshot, records.get(snapshot.id)))
+      }).catch(() => { failed = true; throw new CliFailure('persistence-failed') })
+      chain = task.catch(() => {})
+      return task
+    },
+    list(parent) {
+      if (closed) return []
+      const values = ordered(records.values(), parent)
+      const finished = values.filter(value => !activeRecord(value)).slice(-limit)
+      const selected = new Set(finished.map(value => value.id))
+      return values.filter(value => activeRecord(value) || selected.has(value.id)).map(cloneRecord)
+    },
+    flush,
+    close() {
+      if (closing !== undefined) return closing
+      closed = true
+      closing = (async () => {
+        try { await flush() }
+        finally { if (options.close !== undefined) await boundedStorage(options.close, timeout); records.clear() }
+      })()
+      return closing
+    },
+  }
+}
+
+export async function apply(ctx: Context): Promise<void> {
+  const opening = ctx.storageDomain.open(runDomainSpec)
+  const domain = await boundedStorage(() => opening).catch(error => {
+    void opening.then(value => value.close()).catch(() => {})
+    throw error
+  })
+  let store: PersistentCliRunStore
+  try { store = await createPersistentRunStore(domain.table('runs'), { close: () => domain.close() }) }
+  catch (error) { await boundedStorage(() => domain.close()); throw error }
+  ctx.effect(() => () => store.close(), 'close persistent CLI run records')
+  ctx.provide(RUN_SERVICE, store)
 }

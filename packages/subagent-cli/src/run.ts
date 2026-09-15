@@ -5,11 +5,14 @@ import { resolveChildCwd, settleRunResult, subprocessRunHandle } from '@deepseek
 import type { ResolvedSubagentStartRequest, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import type { CliConfig } from './config.ts'
-import { openCodeCommand } from './command.ts'
+import type { ResolvedCliConfig } from './config.ts'
+import type { HarnessAdapter } from './adapter.ts'
+import { validateInvocation, validateTranscript } from './adapters.ts'
+import { CLI_CHILD_ENV } from './guard.ts'
+import { boundedStorage } from './journal.ts'
+import { DEFAULT_PROTOCOL_LIMITS } from './jsonl.ts'
 import { CliFailure, failureOf } from './failure.ts'
 import type { FailureCode } from './failure.ts'
-import { createOpenCodeTranscript } from './opencode.ts'
 import type { CliRunEvent, ProviderDependencies } from './types.ts'
 
 const MAX_PROMPT_BYTES = 256 * 1024
@@ -39,8 +42,9 @@ function notify(deps: ProviderDependencies, event: CliRunEvent): void {
 
 export async function startCliRun(
   request: ResolvedSubagentStartRequest,
-  config: CliConfig,
+  config: ResolvedCliConfig,
   deps: ProviderDependencies,
+  adapter: HarnessAdapter,
 ): Promise<SubagentRun> {
   if (request.signal.aborted) throw new CliFailure('cancelled')
   const prompt = promptText(request)
@@ -49,10 +53,21 @@ export async function startCliRun(
   catch { throw new CliFailure('invalid-cwd') }
   const identity = {
     id: randomUUID(), parentSessionId: request.parent.session.id,
-    provider: config.name, startedAt: Date.now(),
+    provider: config.name, harness: adapter.id, startedAt: Date.now(),
     ...(request.label === undefined ? {} : { label: request.label }),
   }
-  const transcript = createOpenCodeTranscript()
+  const transcript = validateTranscript(adapter.transcript({ ...DEFAULT_PROTOCOL_LIMITS }))
+  const invocation = validateInvocation(adapter.invocation({ cwd, prompt, config }))
+  function outputSnapshot(): Array<{ type: 'text'; text: string }> {
+    const output = transcript.output()
+    if (!Array.isArray(output) || output.some(block => block === null || typeof block !== 'object' || block.type !== 'text' || typeof block.text !== 'string')) throw new CliFailure('invalid-event')
+    if (output.reduce((total, block) => total + Buffer.byteLength(block.text), 0) > DEFAULT_PROTOCOL_LIMITS.maxOutputBytes) throw new CliFailure('output-limit')
+    return output.filter(block => block.text.trim() !== '').map(block => ({ type: 'text', text: block.text }))
+  }
+  const journal = async (event: CliRunEvent): Promise<void> => {
+    if (deps.journal !== undefined) await boundedStorage(() => deps.journal!.record(event))
+  }
+  if (deps.journal !== undefined) await journal({ ...identity, type: 'prepared' })
   const abort = new AbortController()
   const timer = deadline(abort.signal, config.timeoutMs, TIMEOUT_CODE)
   let cause: CliFailure | undefined
@@ -115,17 +130,30 @@ export async function startCliRun(
   let completed: Promise<SubprocessOutcome>
   try {
     let executable: string
-    try { executable = await deps.subprocess.resolveExecutable(config.executable, undefined, timer.signal) }
+    try {
+      if (timer.signal.aborted) throw cause ?? new CliFailure('cancelled')
+      executable = await Promise.race([deps.subprocess.resolveExecutable(config.executable, undefined, timer.signal), interrupted])
+    }
     catch { throw cause ?? new CliFailure('executable-unavailable') }
     if (timer.signal.aborted) throw cause ?? new CliFailure('cancelled')
-    const command = openCodeCommand(executable, cwd, config)
+    const command = { argv: [executable, ...invocation.args], env: { [CLI_CHILD_ENV]: '1', ...invocation.env } }
+    command.env[CLI_CHILD_ENV] = '1'
     try {
       child = deps.subprocess.spawn({ ...command, cwd, stdio: { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' }, graceMs: config.graceMs, signal: timer.signal })
     } catch { throw cause ?? new CliFailure('spawn-failed') }
     void child.done.catch(() => {})
     if (child.stdin === undefined || child.stdout === undefined || child.stderr === undefined) throw new CliFailure('missing-pipe')
     child.stdin.on('error', onInputError)
-    const stdout = guard(consume(child.stdout, bytes => transcript.push(bytes)).then(() => transcript.end()), 'stream-failed')
+    let stdoutBytes = 0, lineBytes = 0
+    const stdout = guard(consume(child.stdout, bytes => {
+      stdoutBytes += bytes.byteLength
+      if (stdoutBytes > DEFAULT_PROTOCOL_LIMITS.maxOutputBytes) throw new CliFailure('output-limit')
+      for (const byte of bytes) {
+        lineBytes = byte === 10 ? 0 : lineBytes + 1
+        if (lineBytes > DEFAULT_PROTOCOL_LIMITS.maxLineBytes) throw new CliFailure('line-limit')
+      }
+      transcript.push(bytes)
+    }).then(() => transcript.end()), 'stream-failed')
     let stderrBytes = 0
     const stderr = guard(consume(child.stderr, bytes => {
       stderrBytes += bytes.byteLength
@@ -135,7 +163,7 @@ export async function startCliRun(
     const outcome = guard(child.done, 'process-failed')
     completed = guard(Promise.all([outcome, stdout, stderr]).then(([value]) => value), 'stream-failed')
     const input = new Promise<void>((resolve, reject) => {
-      try { child?.stdin?.end(prompt, 'utf8', resolve) } catch { reject(new CliFailure('input-failed')) }
+      try { child?.stdin?.end(invocation.stdin, 'utf8', resolve) } catch { reject(new CliFailure('input-failed')) }
     })
     await Promise.race([
       input,
@@ -143,9 +171,14 @@ export async function startCliRun(
       outcome.then((): never => { throw new CliFailure('input-failed') }),
     ])
     if (cause !== undefined) throw cause
+    await journal({ ...identity, type: 'started' })
+    if (cause !== undefined) throw cause
   } catch (error) {
-    await teardown()
-    throw failureOf(error, 'spawn-failed')
+    let failure = failureOf(error, 'spawn-failed')
+    try { await teardown() } catch { failure = new CliFailure('cleanup-failed') }
+    try { await journal({ ...identity, type: 'settled', endedAt: Date.now(), stopReason: failure.code === 'cancelled' ? 'aborted' : 'error', diagnostic: failure.message }) }
+    catch { failure = new CliFailure('persistence-failed') }
+    throw failure
   }
 
   notify(deps, { ...identity, type: 'started' })
@@ -158,28 +191,43 @@ export async function startCliRun(
         const terminal = transcript.terminal()
         if (terminal === 'failed') throw new CliFailure('cli-error')
         if (terminal !== 'completed') throw new CliFailure('incomplete-output')
-        const output = transcript.output()
+        const output = outputSnapshot()
         if (output.length === 0) throw new CliFailure('empty-output')
         return { output, stopReason: 'completed' }
       } finally { await teardown() }
     },
-    collectOutput: () => transcript.output(),
+    collectOutput: outputSnapshot,
     collectDiagnostic: () => cleanupFailure?.message ?? cause?.message,
     cancelled: () => cause?.code === 'cancelled' && cleanupFailure === undefined,
     onError: error => { cause ??= failureOf(error, 'process-failed') },
     signal: request.signal,
     onAbort,
   })
-  const result = coreResult.then(value => {
+  const result = coreResult.then(async value => {
     settled = true
-    const externalSessionId = transcript.externalSessionId()
-    const usage = transcript.usage()
-    notify(deps, {
-      ...identity, type: 'settled', endedAt: Date.now(), stopReason: value.stopReason,
-      ...(value.diagnostic === undefined ? {} : { diagnostic: value.diagnostic }),
-      ...(externalSessionId === undefined ? {} : { externalSessionId }),
-      ...(usage === undefined ? {} : { usage }),
-    })
+    let event: CliRunEvent
+    try {
+      const externalSessionId = transcript.externalSessionId()
+      const usage = transcript.usage()
+      event = {
+        ...identity, type: 'settled', endedAt: Date.now(), stopReason: value.stopReason,
+        ...(value.diagnostic === undefined ? {} : { diagnostic: value.diagnostic }),
+        ...(externalSessionId === undefined ? {} : { externalSessionId }),
+        ...(usage === undefined ? {} : { usage }),
+      }
+    } catch {
+      value = { output: [], stopReason: 'error', diagnostic: 'subagent-cli: invalid-event' }
+      event = { ...identity, type: 'settled', endedAt: Date.now(), stopReason: 'error', diagnostic: 'subagent-cli: invalid-event' }
+    }
+    try { await journal(event) }
+    catch { return { ...value, stopReason: 'error' as const, diagnostic: 'subagent-cli: persistence-failed' } }
+    notify(deps, event)
+    return value
+  }, async () => {
+    settled = true
+    const value = { output: [], stopReason: 'error' as const, diagnostic: 'subagent-cli: invalid-event' }
+    try { await journal({ ...identity, ...value, type: 'settled', endedAt: Date.now() }) }
+    catch { value.diagnostic = 'subagent-cli: persistence-failed' }
     return value
   })
   return subprocessRunHandle({

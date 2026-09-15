@@ -10,12 +10,12 @@ export function cliRunReader(ctx: Context): CliRunReader | undefined {
   const key: CliRunServiceKey = 'subagentCliRuns'
   const value: unknown = ctx.get(key)
   if (value === undefined) return undefined
-  if (value === null || typeof value !== 'object' || !('version' in value) || value.version !== 1 || !('list' in value) || typeof value.list !== 'function') throw new Error('collab-flow: incompatible CLI run service')
+  if (value === null || typeof value !== 'object' || !('version' in value) || (value.version !== 1 && value.version !== 2) || !('list' in value) || typeof value.list !== 'function') throw new Error('collab-flow: incompatible CLI run service')
   return value as CliRunReader
 }
 
 function mergeRun(run: CliRunRecord, previous: CollabGraphNode | undefined): CollabGraphNode {
-  const retainTerminal = previous !== undefined && terminal(previous.status) && run.status === 'running'
+  const retainTerminal = previous !== undefined && terminal(previous.status) && (run.status === 'pending' || run.status === 'running')
   const node: CollabGraphNode = {
     ...previous,
     id: run.id, kind: 'subagent', provider: run.provider,

@@ -11,6 +11,9 @@ export interface CliUsage {
   reportedSteps: number
   observedSteps: number
   complete: boolean
+  source?: string
+  scope?: 'step' | 'turn' | 'run'
+  inputIncludesCache?: boolean
 }
 
 export interface CliRunIdentity {
@@ -18,11 +21,12 @@ export interface CliRunIdentity {
   parentSessionId: string
   provider: string
   startedAt: number
+  harness?: string
   label?: string
 }
 
 export type CliRunEvent =
-  | (CliRunIdentity & { type: 'started' })
+  | (CliRunIdentity & { type: 'prepared' | 'started' })
   | (CliRunIdentity & {
     type: 'settled'
     endedAt: number
@@ -35,12 +39,13 @@ export type CliRunEvent =
 export interface ProviderDependencies {
   subprocess: Pick<SubprocessRuntime, 'resolveExecutable' | 'spawn'>
   observe?: (event: CliRunEvent) => void | Promise<void>
+  journal?: { record(event: CliRunEvent): Promise<void> }
 }
 
 export type CliRunServiceKey = 'subagentCliRuns'
 
 export interface CliRunRecord extends CliRunIdentity {
-  status: 'running' | 'completed' | 'cancelled' | 'error'
+  status: 'pending' | 'running' | 'completed' | 'cancelled' | 'error'
   endedAt?: number
   externalSessionId?: string
   diagnostic?: string
@@ -48,11 +53,18 @@ export interface CliRunRecord extends CliRunIdentity {
 }
 
 export interface CliRunReader {
-  readonly version: 1
+  readonly version: 1 | 2
   list(parentSessionId: string): CliRunRecord[]
 }
 
 export interface CliRunStore extends CliRunReader {
   record(event: CliRunEvent): void
   close(): void
+}
+
+export interface PersistentCliRunStore extends CliRunReader {
+  readonly version: 2
+  record(event: CliRunEvent): Promise<void>
+  flush(): Promise<void>
+  close(): Promise<void>
 }

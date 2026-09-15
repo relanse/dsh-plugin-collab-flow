@@ -31,7 +31,7 @@ dsh plugin --profile web add @dsh-community/plugin-collab-flow
 
 ## 已知限制
 
-- 未提供完整用量的子 agent 显示数据不可用；CLI 运行历史目前保留在内存，持久化属于 M3
+- 未提供完整用量的子 agent 显示数据不可用；CLI 运行历史通过 Storage Domain 持久化；重启后未完成任务标记为中断，不自动续跑
 - 运行态视图采用 1 秒轮询，有约 1 秒延迟
 - workflow 脚本在保存时不做语法校验，语法错误在运行时才报告
 
@@ -66,7 +66,7 @@ pnpm dsh web --patch /path/to/collab-flow-test/cordis.yml
 
 ## CLI 子 agent provider
 
-独立包 [packages/subagent-cli](./packages/subagent-cli/README.md)，支持受管 OpenCode 单次委派、超时取消、输出解析和实时协作图。默认按叶子任务执行，拒绝嵌套委派和受控子进程回入。持久化将在 M3 完成，源码加载步骤见 [M2 联调记录](./docs/plan/m2-verification.md)。
+独立包 [packages/subagent-cli](./packages/subagent-cli/README.md)，支持 OpenCode、Claude Code、Codex CLI 单次委派，以及可信本地模块形式的自定义 harness。共享超时取消、输出限额、防递归、持久化记录与实时协作图；重启后恢复历史，不重跑任务。配置及可运行扩展示例见包文档，阶段验证见 [M3 验收记录](./docs/plan/m3-verification.md)。
 
 ## 项目结构
 

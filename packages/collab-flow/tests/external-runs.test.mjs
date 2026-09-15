@@ -49,7 +49,8 @@ test('missing optional service leaves the original graph intact and foreign pare
   const baseline=graph()
   assert.equal(withCliRuns(baseline,undefined),baseline)
   assert.equal(cliRunReader({get:()=>undefined}),undefined)
-  assert.throws(()=>cliRunReader({get:()=>({version:2,list(){}})}))
+  assert.equal(cliRunReader({get:()=>({version:2,list(){return []}})}).version,2)
+  assert.throws(()=>cliRunReader({get:()=>({version:3,list(){}})}))
   const merged=withCliRuns(baseline,{version:1,list:()=>[{...identity,parentSessionId:'other',status:'running'}]})
   assert.equal(merged.nodes.length,1)
 })
@@ -67,4 +68,13 @@ test('the live overlay retains completed baseline times, provider and tokens',()
   assert.equal(node.startedAt,1)
   assert.equal(node.endedAt,5)
   assert.equal(node.tokens.total,12)
+})
+
+test('pending v2 snapshots preserve terminal baseline nodes and their usage',()=>{
+  const baseline=graph()
+  baseline.nodes.push({id:'cli-run',kind:'subagent',label:'done',status:'completed',startedAt:1,endedAt:5,tokens:{input:10,output:2,total:12}})
+  const reader={version:2,list:()=>[{...identity,status:'pending'}]}
+  const merged=withCliRuns(baseline,reader)
+  assert.equal(merged.nodes[1].status,'completed');assert.equal(merged.nodes[1].tokens.total,12)
+  assert.equal(merged.runningCount,0)
 })
