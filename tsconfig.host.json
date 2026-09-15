@@ -1,5 +1,16 @@
 {
   "extends": "./tsconfig.base.json",
   "files": [],
-  "references": [{ "path": "packages/collab-flow/tsconfig.host.face.json" }]
+  "references": [
+    {
+      "path": "packages/collab-flow/tsconfig.host.face.json"
+    }
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@deepseek-ai/dsh-typert-protocol": [
+        "./packages/collab-flow/src/protocol-shim.d.ts"
+      ]
+    }
+  }
 }

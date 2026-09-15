@@ -61,8 +61,8 @@
     "build:lib:host": "tsc -b ../../tsconfig.host.json && tsdown --env.DSH_BUILD_FACE host",
     "build:lib:client": "tsc -b ../../tsconfig.client.json && tsdown --env.DSH_BUILD_FACE client",
     "build": "pnpm run build:lib:host && pnpm run build:lib:client",
-    "test": "pnpm run build && node --test tests/client-bundle.test.mjs tests/client-mount.test.mjs tests/projection.test.mjs tests/graph-builder.test.mjs tests/template-store.test.mjs tests/remote.test.mjs",
-    "typecheck": "tsc -b ../../tsconfig.host.json ../../tsconfig.client.json --pretty false",
+    "test": "pnpm run build && node --test tests/client-bundle.test.mjs tests/client-mount.test.mjs tests/projection.test.mjs tests/graph-builder.test.mjs tests/template-store.test.mjs tests/remote.test.mjs tests/storage-domain.test.mjs",
+    "typecheck": "pnpm run build:lib:host && tsc -b tsconfig.client.json --pretty false",
     "lint": "oxlint src"
   },
   "peerDependencies": {
@@ -85,8 +85,10 @@
     "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-session-projection": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-storage-domain": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-storage-json": "0.1.5-rc.2",
     "@deepseek-ai/dsh-subagent": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-tool-workflow": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-typert-generator": "0.1.5-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.2",
     "@deepseek-ai/dsh-workflow": "^0.1.5-rc.2",
     "@types/node": "^20.0.0",

@@ -27,3 +27,4 @@
 | [03-slots.md](./03-slots.md) | `src/client/index.ts` | Cordis 双半边插件、DSH Slot 机制、UI 注入 |
 | [04-storage-domain.md](./04-storage-domain.md) | `src/template-store.ts` | Storage Domain 声明、schema 校验、KV 持久化 |
 | [05-remote-api.md](./05-remote-api.md) | `src/index.ts`、`src/client/index.ts` | Typert Remote 生成、挂载和生命周期 |
+| [06-standalone-build.md](./06-standalone-build.md) | `tsdown.config.ts`、Host/Client tsconfig | 独立构建、Remote 生成与 ModuleLoader 工厂 |

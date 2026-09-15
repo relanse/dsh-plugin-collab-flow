@@ -6,7 +6,7 @@ import type {
   WorkflowResultInfo,
   WorkflowRunInfo,
 } from '@deepseek-ai/dsh-workflow/types'
-import type { SubagentRunEndInfo, SubagentRunInfo } from '@deepseek-ai/dsh-subagent/types'
+import type { SubagentRunEndInfo, SubagentRunInfo } from '@deepseek-ai/dsh-subagent'
 import type {
   CollabGraph,
   CollabGraphNode,

@@ -8,7 +8,7 @@
 
 这是 `dsh-plugin-collab-flow`，一个运行在 **DeepSeek Harness (DSH)** 上的 Cordis 插件。
 
-- 宿主平台：`C:\Users\LanSe\Desktop\dev\deepseek-harness`
+- 宿主平台：DSH `0.1.5-rc.2`；本仓库通过发布包独立构建，联调使用本机安装的 DSH profile
 - 插件包：`packages/collab-flow/`
 - 技术栈：TypeScript，Cordis 插件体系，React（Client 侧）
 
@@ -149,25 +149,14 @@ interface SubagentRunEndInfo extends SubagentRunInfo {
 
 ---
 
-## 五、待补充的依赖（下一步）
+## 五、构建与依赖约定
 
-`package.json` 还缺少以下依赖，添加前需确认 DSH 版本对齐：
-
-```json
-"devDependencies": {
-  "zod": "^3.x",
-  "@deepseek-ai/dsh-workflow": "workspace:*",
-  "@deepseek-ai/dsh-subagent": "workspace:*",
-  "@deepseek-ai/dsh-session": "workspace:*",
-  "@deepseek-ai/dsh-session-projection": "workspace:*",
-  "@deepseek-ai/dsh-storage-domain": "workspace:*",
-  "@deepseek-ai/dsh-token-meter": "workspace:*",
-  "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
-  "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
-  "react": "^18.0.0",
-  "@types/react": "^18.0.0"
-}
-```
+- 依赖以 package.json 和 pnpm-lock.yaml 为准；Typert 生成器使用发布的 0.1.5-rc.2。
+- Host 先编译和生成 Remote contribution，再进行 Client 类型检查与打包。
+- 协议 shim 必须同时对 Host solution 分析入口与包内 Host 编译入口生效；Client 使用真实发布声明。
+- 不恢复指向相邻 deepseek-harness checkout 的 paths 或 references。
+- pnpm clean 后的 pnpm test 是冷构建验收入口；pnpm typecheck 也包含必要的 Host 生成步骤。
+- 阶段进度见 docs/plan/progress.md，构建细节见 docs/deep-dive/06-standalone-build.md。
 
 ---
 
