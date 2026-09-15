@@ -55,10 +55,11 @@ probe 使用真实 DSH LocalSubprocessRuntime，在临时目录中禁用工具�
 | cwd | 未设置 | 默认读取父 Session 的 header.cwd，缺失时报错 |
 | model | 未设置 | 可选的静态 provider/model；未指定时使用 CLI 原生配置，建议显式选择已启用的路由 |
 | variant | 未设置 | 静态推理档位参数 |
-| permissionMode | deny | deny 禁用工具；auto 显式启用 CLI --auto，同时保留原生明确拒绝规则 |
+| permissionMode | deny | deny 禁用工具；auto 显式启用 CLI --auto，同时保留原生明确拒绝规则，task 始终拒绝 |
 | pure | true | 默认关闭 OpenCode 外部插件；依赖插件的部署需显式关闭该选项 |
 | timeoutMs | 120000 | 覆盖可执行文件解析、输入和执行的总超时 |
 | graceMs | 1000 | 交给 DSH subprocess 的进程终止宽限期 |
+| maxConcurrentRuns | 4 | 每个 provider 的活动/启动中任务上限，范围 1–32；满额立即拒绝 |
 
 权限配置和命令参数由部署决定，模型不能覆写 executable、环境变量或权限模式。prompt 只通过 stdin 传递。官方 subprocess 会清理父进程的敏感环境名；原生 CLI 配置/登录文件仍由 OpenCode 管理。
 
@@ -80,3 +81,11 @@ DSH 的 run.id 与 OpenCode 的 externalSessionId 是不同身份。SubagentResu
 - 正常退出、已知终态和非空最终文本共同决定成功。工具步骤完成事件不能提前结束整个 run。
 - usage 按 message/step 身份去重；缺少 input/output/total 或未观察到最终状态时不会伪造完整统计。complete 只说明这三个计数的覆盖情况；缓存和 reasoning 数字独立保留，仍可能未知。
 - 不声明 prepareContinuable 或额外启动能力。移除 provider 只阻止新调用；已发布 run 仍由原持有方管理。
+
+## 叶子委派与防循环
+
+- 已有原生子代理 origin 或委派深度的父会话不能再次调用本 provider；普通顶层 fork 不受此限制。
+- CLI 子进程获得 COLLAB_FLOW_CLI_CHILD 标记，正常继承该环境的 DSH/CLI 桥接入口会拒绝回入，换 provider 名称也不能绕过。
+- OpenCode 的 task 工具即使在 auto 模式也明确拒绝，避免内置子代理继续派生。
+- 并发上限不建立等待队列。额度在资源清理后仅释放一次；清理失败时停止接纳新任务。
+- 这是受控调用路径的防护，不是系统级沙箱。有权运行任意程序并主动移除标记的代码，不在绝对隔离保证内。默认 deny 和总超时仍然保留。

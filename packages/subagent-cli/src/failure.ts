@@ -1,4 +1,5 @@
 export type FailureCode =
+  | 'recursive-entry' | 'nested-delegation' | 'invalid-delegation-state' | 'concurrency-limit'
   | 'invalid-cwd' | 'unsupported-content' | 'empty-prompt' | 'prompt-limit'
   | 'executable-unavailable' | 'spawn-failed' | 'missing-pipe' | 'input-failed'
   | 'timeout' | 'cancelled' | 'output-limit' | 'line-limit' | 'invalid-json'

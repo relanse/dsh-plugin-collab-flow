@@ -39,6 +39,9 @@ Config 使用官方 Schemastery。executable、model、variant 与权限属于�
 
 ## 边界条件和限制
 
+- provider 只接纳顶层父会话，拒绝子代理 origin、非零委派深度和继承 CLI 子进程标记的回入。OpenCode task 即使在 auto 模式也拒绝。
+- 并发额度覆盖启动阶段，满额不排队；result 与 dispose 共同幂等释放额度，清理状态不确定时拒绝继续接纳。
+
 - 单个管道 chunk 不等于一个事件。UTF-8 多字节字符、跨 chunk 行与 EOF 尾行均有测试。
 - 工具调用可能对应多个 step_finish。M0 的真实拒绝工具样本共报告 28438 tokens，最后一步只有 6434；不能只取末次快照。
 - stdout 总量、单行、stderr 和 prompt 分别设字节上限。原始 stderr、错误 payload、工具输入和命令不会直接拼入 diagnostic。

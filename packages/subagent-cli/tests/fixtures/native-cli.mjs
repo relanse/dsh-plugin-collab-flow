@@ -16,6 +16,6 @@ process.stdin.on('end', () => {
     return
   }
   process.stderr.write('FAKE_SENSITIVE_STDERR')
-  emit('text', { id: 'text', type: 'text', text: JSON.stringify({ input, credentialForwarded: process.env.SUBAGENT_TEST_API_KEY !== undefined, identityForwarded: process.env.DSH_TEST_PARENT !== undefined }) })
+  emit('text', { id: 'text', type: 'text', text: JSON.stringify({ input, credentialForwarded: process.env.SUBAGENT_TEST_API_KEY !== undefined, identityForwarded: process.env.DSH_TEST_PARENT !== undefined, leafMarker: process.env.COLLAB_FLOW_CLI_CHILD === '1' }) })
   emit('step_finish', { id: 'finish', type: 'step-finish', reason: 'stop', tokens: { input: 5, output: 3, total: 8 } })
 })

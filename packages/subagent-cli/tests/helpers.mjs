@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 
 export function request(signal = new AbortController().signal, text = 'protocol prompt') {
   return {
-    parent: { session: { id: 'parent-test', header: { cwd: tmpdir() } } },
+    parent: { options: {}, session: { id: 'parent-test', header: { cwd: tmpdir() } } },
     prompt: [{ type: 'text', text }], signal,
     descriptor: { mode: 'one-shot', provider: 'opencode-cli' },
   }

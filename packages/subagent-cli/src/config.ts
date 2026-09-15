@@ -11,10 +11,11 @@ export interface CliConfig {
   pure: boolean
   timeoutMs: number
   graceMs: number
+  maxConcurrentRuns: number
 }
 
 export const Config: Schema<Partial<CliConfig>, CliConfig> = Schema.object({
-  name: Schema.string().pattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/).default('opencode-cli'),
+  name: Schema.string().pattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/).max(512).default('opencode-cli'),
   executable: Schema.string().min(1).default('opencode'),
   cwd: Schema.string().min(1),
   model: Schema.string().pattern(/^[^\s/]+\/[^\s]+$/),
@@ -23,4 +24,5 @@ export const Config: Schema<Partial<CliConfig>, CliConfig> = Schema.object({
   pure: Schema.boolean().default(true),
   timeoutMs: Schema.number().step(1).min(1).max(MAX_TIMER_DELAY_MS).default(120_000),
   graceMs: Schema.number().step(1).min(1).max(60_000).default(1_000),
+  maxConcurrentRuns: Schema.natural().min(1).max(32).default(4),
 })

@@ -39,7 +39,8 @@ test('prompt uses stdin, command values remain separate arguments, and permissio
   assert.equal(handle.spec.argv.includes('--auto'), false)
   assert.ok(handle.spec.argv.includes('provider/model'))
   const env = handle.spec.env
-  assert.deepEqual(Object.keys(env), ['OPENCODE_CONFIG_CONTENT'])
+  assert.deepEqual(Object.keys(env), ['COLLAB_FLOW_CLI_CHILD', 'OPENCODE_CONFIG_CONTENT'])
+  assert.equal(env.COLLAB_FLOW_CLI_CHILD, '1')
   assert.equal(JSON.parse(env.OPENCODE_CONFIG_CONTENT).agent['dsh-cli'].permission, 'deny')
   assert.equal(observations[0].parentSessionId, 'parent-test')
   assert.equal(observations[0].id, run.id)
@@ -55,7 +56,7 @@ test('auto permissions require deployment opt-in and do not install allow overri
   await run.result
   assert.ok(handles[0].spec.argv.includes('--auto'))
   assert.equal(handles[0].spec.argv.includes('--pure'), false)
-  assert.equal(JSON.parse(handles[0].spec.env.OPENCODE_CONFIG_CONTENT).permission, undefined)
+  assert.deepEqual(JSON.parse(handles[0].spec.env.OPENCODE_CONFIG_CONTENT).permission, { task: 'deny' })
 })
 
 test('unsupported, empty and oversized prompts are rejected before spawn', async () => {
@@ -71,7 +72,7 @@ test('unsupported, empty and oversized prompts are rejected before spawn', async
 })
 
 test('invalid deployment values fail before starting any process', () => {
-  for (const config of [{ timeoutMs: 0 }, { timeoutMs: Infinity }, { graceMs: -1 }, { name: '' }, { permissionMode: 'implicit-auto' }]) {
+  for (const config of [{ timeoutMs: 0 }, { timeoutMs: Infinity }, { graceMs: -1 }, { name: '' }, { name: 'x'.repeat(513) }, { permissionMode: 'implicit-auto' }]) {
     assert.throws(() => setup({}, config))
   }
 })
@@ -79,7 +80,7 @@ test('invalid deployment values fail before starting any process', () => {
 test('pre-aborted requests and missing cwd do not allocate resources', async () => {
   const { provider, handles } = setup()
   await assert.rejects(provider.start(request(AbortSignal.abort())), error => error.code === 'cancelled')
-  await assert.rejects(provider.start({ ...request(), parent: { session: { id: 'parent', header: {} } } }), error => error.code === 'invalid-cwd')
+  await assert.rejects(provider.start({ ...request(), parent: { options: {}, session: { id: 'parent', header: {} } } }), error => error.code === 'invalid-cwd')
   assert.equal(handles.length, 0)
 })
 

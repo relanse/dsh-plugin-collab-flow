@@ -41,7 +41,7 @@ test('real DSH subprocess carries stdin and scrubs ambient credentials and ident
   const run = await provider.start(request(undefined, text))
   const result = await run.result
   assert.equal(result.stopReason, 'completed', result.diagnostic)
-  assert.deepEqual(JSON.parse(result.output[0].text), { input: text, credentialForwarded: false, identityForwarded: false })
+  assert.deepEqual(JSON.parse(result.output[0].text), { input: text, credentialForwarded: false, identityForwarded: false, leafMarker: true })
   await run.dispose()
 })
 

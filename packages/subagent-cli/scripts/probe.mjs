@@ -20,7 +20,7 @@ try {
     executable: values.executable, model: values.model, permissionMode: 'deny', timeoutMs: 60_000,
   })
   run = await provider.start({
-    parent: { session: { id: 'provider-probe-parent', header: { cwd } } },
+    parent: { options: {}, session: { id: 'provider-probe-parent', header: { cwd } } },
     prompt: [{ type: 'text', text: 'Reply with exactly COLLAB_M1_OK. Do not use tools or read files.' }],
     signal: new AbortController().signal,
     descriptor: { mode: 'one-shot', provider: 'opencode-cli' },

@@ -1,4 +1,5 @@
 import type { CliConfig } from './config.ts'
+import { CLI_CHILD_ENV } from './guard.ts'
 
 export function openCodeCommand(executable: string, cwd: string, config: CliConfig): {
   argv: string[]
@@ -9,10 +10,11 @@ export function openCodeCommand(executable: string, cwd: string, config: CliConf
   if (config.model !== undefined) argv.push('--model', config.model)
   if (config.variant !== undefined) argv.push('--variant', config.variant)
   if (config.permissionMode === 'auto') argv.push('--auto')
-  const permission = config.permissionMode === 'deny' ? { permission: 'deny' } : {}
+  const permission = config.permissionMode === 'deny' ? { permission: 'deny' } : { permission: { task: 'deny' } }
   return {
     argv,
     env: {
+      [CLI_CHILD_ENV]: '1',
       OPENCODE_CONFIG_CONTENT: JSON.stringify({
         autoupdate: false,
         share: 'disabled',
