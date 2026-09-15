@@ -30,7 +30,7 @@ declare module '@deepseek-ai/cordis' {
 /** Host services required by this plugin's Service constructor. */
 export class CollabFlowService extends TypertRemoteService {
   // Typert must be ready before this service binds its remote namespace.
-  static inject = ['typert', 'agents', 'sessions', 'workflowEngine', 'sessionProjections', 'storageDomain']
+  static inject = ['typert', 'agents', 'sessions', 'sessionProjections', 'storageDomain']
 
   private readonly graphBuilder = new GraphBuilder()
   private readonly templateStore = new TemplateStore()
@@ -75,12 +75,14 @@ export class CollabFlowService extends TypertRemoteService {
   /** Start a workflow on the exact live Agent for the requested Session. */
   @Remote
   async launchTemplate(sessionId: string, templateId: string, args?: WorkflowArgs): Promise<void> {
+    const engine = this.ctx.get('workflowEngine') as Context['workflowEngine'] | undefined
+    if (engine === undefined) throw new Error('工作流引擎未启用：请在 profile 中启用 workflow-worker-thread 后再运行模板')
     const agent = this.ctx.agents.get(sessionId as SessionId)
     if (agent === undefined) throw new Error(`Session ${sessionId} 没有活跃的 agent`)
     const template = (await this.templateStore.list()).find(candidate => candidate.id === templateId)
     if (template === undefined) throw new Error(`模板 ${templateId} 不存在`)
 
-    const run = this.ctx.workflowEngine.start({
+    const run = engine.start({
       script: template.script,
       meta: {
         name: template.meta.name,

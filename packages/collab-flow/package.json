@@ -40,12 +40,14 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts"
+    "lib/typert.remote-client.d.ts",
+    "cordis.patch.yml",
+    "README.md",
+    "lib/types/types.js"
   ],
   "dsh": {
     "client": {
@@ -55,20 +57,23 @@
         "@deepseek-ai/dsh-client-ui-sidebar-right"
       ],
       "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
     }
   },
   "scripts": {
     "build:lib:host": "tsc -b ../../tsconfig.host.json && tsdown --env.DSH_BUILD_FACE host",
     "build:lib:client": "tsc -b ../../tsconfig.client.json && tsdown --env.DSH_BUILD_FACE client",
     "build": "pnpm run build:lib:host && pnpm run build:lib:client",
-    "test": "pnpm run build && node --test tests/client-bundle.test.mjs tests/client-mount.test.mjs tests/projection.test.mjs tests/graph-builder.test.mjs tests/template-store.test.mjs tests/remote.test.mjs tests/storage-domain.test.mjs tests/external-runs.test.mjs tests/graph-view.test.mjs",
+    "test": "pnpm run build && node --test tests/*.test.mjs",
     "typecheck": "pnpm run build:lib:host && tsc -b tsconfig.client.json --pretty false",
-    "lint": "oxlint src"
+    "lint": "oxlint src client-entry.ts"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-storage-domain": "^0.1.5-rc.2",
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.2"
+    "@deepseek-ai/dsh-storage-domain": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2"
   },
   "dependencies": {
     "zod": "4.4.3"
@@ -100,5 +105,8 @@
     "typescript": "^6.0.3",
     "@dsh-community/plugin-subagent-cli": "workspace:*",
     "react-dom": "18.3.0"
+  },
+  "engines": {
+    "node": ">=22.23.1"
   }
 }

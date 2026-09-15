@@ -59,7 +59,7 @@ export default (input: { env?: Record<string, unknown> }): UserConfig => {
 
   return {
     name: PACKAGE_ID + '/client',
-    entry: { client: 'src/client/index.ts' },
+    entry: { client: 'client-entry.ts' },
     outDir: 'lib',
     platform: 'browser',
     target: 'es2024',
