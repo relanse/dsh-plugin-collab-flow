@@ -25,7 +25,7 @@ pnpm install --frozen-lockfile
 pnpm release:check
 ~~~
 
-命令依次执行清理、所有测试、类型检查、lint 和真实压缩包审计。dist 目录产生两个 tgz、SHA256SUMS 和 release-manifest.json。清单记录源 commit、工作区是否有未提交变更、包版本、内容数量及 SHA-256。
+命令依次执行清理、所有测试、类型检查、lint 和真实压缩包审计。dist 目录产生两个 tgz、SHA256SUMS 和 release-manifest.json。清单记录源 commit、已跟踪文件及发行源码是否有未提交变更、包版本、内容数量及 SHA-256。
 
 发布候选必须来自干净的提交：
 
