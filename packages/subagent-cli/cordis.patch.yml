@@ -1,3 +1,5 @@
 - insert:
+    - id: subagent-cli-runs
+      name: '@dsh-community/plugin-subagent-cli/runs'
     - id: subagent-cli
       name: '@dsh-community/plugin-subagent-cli'

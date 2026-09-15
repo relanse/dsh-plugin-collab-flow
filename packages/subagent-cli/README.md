@@ -1,6 +1,6 @@
 # @dsh-community/plugin-subagent-cli
 
-DSH 的 OpenCode 单次子 agent provider。M1 已实现配置、受管进程、JSONL 解析、超时取消和运行观察回调；协作图接入与持久化分别在 M2/M3。
+DSH 的 OpenCode 单次子 agent provider。M2 已接入实时协作图和叶子委派保护；配置、受管进程、JSONL 解析与超时取消继续由独立 provider 负责。持久化在 M3。
 
 验证基线：DSH 0.1.5-rc.2、OpenCode 1.18.30、Node 22.22.2、Windows。包使用宿主已有的 OpenCode，不附带 CLI 或登录凭据。
 
@@ -21,6 +21,8 @@ probe 使用真实 DSH LocalSubprocessRuntime，在临时目录中禁用工具�
 
 ~~~yaml
 - insert:
+    - id: subagent-cli-runs
+      name: D:/path/to/dsh-plugin-collab-flow/packages/subagent-cli/lib/runs.js
     - id: subagent-cli
       name: D:/path/to/dsh-plugin-collab-flow/packages/subagent-cli/lib/index.js
       config:
@@ -44,7 +46,7 @@ probe 使用真实 DSH LocalSubprocessRuntime，在临时目录中禁用工具�
     enableRunInBackground: false
 ~~~
 
-加载 provider 只注册服务，不会启动进程。完整 Web profile 的配置与界面验收属于 M2。
+运行记录服务与 provider 一起加载；加载时不会启动进程。源码联调可使用仓库的 scripts/create-cli-patch.mjs 生成正确的 file URL，完整步骤见 docs/plan/m2-verification.md。
 
 ## 配置
 
@@ -59,7 +61,7 @@ probe 使用真实 DSH LocalSubprocessRuntime，在临时目录中禁用工具�
 | pure | true | 默认关闭 OpenCode 外部插件；依赖插件的部署需显式关闭该选项 |
 | timeoutMs | 120000 | 覆盖可执行文件解析、输入和执行的总超时 |
 | graceMs | 1000 | 交给 DSH subprocess 的进程终止宽限期 |
-| maxConcurrentRuns | 4 | 每个 provider 的活动/启动中任务上限，范围 1–32；满额立即拒绝 |
+| maxConcurrentRuns | 4 | 每个 provider 实例最多接受的活动/启动中任务数，范围 1–32；满额立即拒绝 |
 
 权限配置和命令参数由部署决定，模型不能覆写 executable、环境变量或权限模式。prompt 只通过 stdin 传递。官方 subprocess 会清理父进程的敏感环境名；原生 CLI 配置/登录文件仍由 OpenCode 管理。
 
@@ -69,7 +71,7 @@ createOpenCodeProvider({ subprocess, observe? }, config) 返回标准 SubagentPr
 
 DSH 的 run.id 与 OpenCode 的 externalSessionId 是不同身份。SubagentResult 只返回最终文本和安全诊断，usage 通过观察回调提供，不伪造原生 subagent/catalog 或父日志事件。
 
-观察回调不是持久化确认机制；异常被隔离，不改变任务结果。异步存储、重启恢复及 UI 合并由后续阶段实现。
+观察回调不是持久化确认机制；异常被隔离，不改变任务结果。插件默认将回调连接到 subagentCliRuns 内存服务，collab-flow 可选读取并合并。服务隔离父会话、返回副本、保留所有活动记录和最近 200 条结束记录；异步存储与重启恢复由 M3 实现。
 
 ## 运行语义
 
@@ -89,3 +91,5 @@ DSH 的 run.id 与 OpenCode 的 externalSessionId 是不同身份。SubagentResu
 - OpenCode 的 task 工具即使在 auto 模式也明确拒绝，避免内置子代理继续派生。
 - 并发上限不建立等待队列。额度在资源清理后仅释放一次；清理失败时停止接纳新任务。
 - 这是受控调用路径的防护，不是系统级沙箱。有权运行任意程序并主动移除标记的代码，不在绝对隔离保证内。默认 deny 和总超时仍然保留。
+
+可以运行 scripts/check-leaf-permission.mjs --executable <opencode.exe> 检查实际权限；该命令读取配置，不调用模型。

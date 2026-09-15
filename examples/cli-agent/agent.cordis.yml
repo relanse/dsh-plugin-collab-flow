@@ -1,0 +1,8 @@
+- id: tool-subagent-cli
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: opencode-cli
+    toolName: subagent_cli
+    maxDepth: provider-managed
+    backgroundMode: one-shot
+    enableRunInBackground: false

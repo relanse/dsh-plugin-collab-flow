@@ -36,3 +36,23 @@ export interface ProviderDependencies {
   subprocess: Pick<SubprocessRuntime, 'resolveExecutable' | 'spawn'>
   observe?: (event: CliRunEvent) => void | Promise<void>
 }
+
+export type CliRunServiceKey = 'subagentCliRuns'
+
+export interface CliRunRecord extends CliRunIdentity {
+  status: 'running' | 'completed' | 'cancelled' | 'error'
+  endedAt?: number
+  externalSessionId?: string
+  diagnostic?: string
+  usage?: CliUsage
+}
+
+export interface CliRunReader {
+  readonly version: 1
+  list(parentSessionId: string): CliRunRecord[]
+}
+
+export interface CliRunStore extends CliRunReader {
+  record(event: CliRunEvent): void
+  close(): void
+}

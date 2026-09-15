@@ -1,7 +1,7 @@
 import type { UserConfig } from 'tsdown'
 
 export default {
-  entry: ['lib/types/index.js'],
+  entry: { index: 'lib/types/index.js', runs: 'lib/types/runs.js' },
   outDir: 'lib',
   platform: 'node',
   target: 'es2024',

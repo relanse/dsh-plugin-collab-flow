@@ -8,7 +8,7 @@ DSH（DeepSeek Harness）的多 Agent 协作可视化插件。
 
 ## 功能
 
-- **运行态投影**：实时展示 workflow run、phase、subagent 的层级树，显示状态、耗时、token 用量（进程内 agent）
+- **运行态投影**：实时展示 workflow run、phase、subagent 的层级树，显示状态、耗时和已完整报告的 token 用量
 - **模板库**：创建、编辑、删除 Workflow 脚本模板，跨 session 持久保存
 - **一键启动**：从模板库直接触发 DSH workflow，无需手动写脚本
 
@@ -31,7 +31,7 @@ dsh plugin --profile web add @dsh-community/plugin-collab-flow
 
 ## 已知限制
 
-- 进程外子 agent（claude-code、codex）的 token 用量无法读取，显示为 `token: —`
+- 未提供完整用量的子 agent 显示数据不可用；CLI 运行历史目前保留在内存，持久化属于 M3
 - 运行态视图采用 1 秒轮询，有约 1 秒延迟
 - workflow 脚本在保存时不做语法校验，语法错误在运行时才报告
 
@@ -66,7 +66,7 @@ pnpm dsh web --patch /path/to/collab-flow-test/cordis.yml
 
 ## CLI 子 agent provider
 
-M1 新增独立包 [packages/subagent-cli](./packages/subagent-cli/README.md)，支持受管 OpenCode 单次委派、超时取消、输出解析和运行观察回调。协作图与持久化接入将在 M2/M3 完成。
+独立包 [packages/subagent-cli](./packages/subagent-cli/README.md)，支持受管 OpenCode 单次委派、超时取消、输出解析和实时协作图。默认按叶子任务执行，拒绝嵌套委派和受控子进程回入。持久化将在 M3 完成，源码加载步骤见 [M2 联调记录](./docs/plan/m2-verification.md)。
 
 ## 项目结构
 

@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createOpenCodeProvider, apply } from '../lib/index.js'
 import { fakeSubprocess, request } from './helpers.mjs'
+import { createRunStore } from '../lib/runs.js'
 
 const fixture = readFileSync(new URL('../../../tests/fixtures/opencode/reply.jsonl', import.meta.url), 'utf8')
 const success = handle => { handle.stdout.write(fixture); handle.finish() }
@@ -15,7 +16,7 @@ const setup = (options = {}, config = {}, observe) => {
 test('plugin registration is dormant and publishes only supported capabilities', () => {
   const fake = fakeSubprocess()
   let registered
-  apply({ subprocess: fake.seam, subagents: { registerProvider(value) { registered = value } } }, {})
+  apply({ get:()=>createRunStore(), subprocess: fake.seam, subagents: { registerProvider(value) { registered = value } } }, {})
   assert.equal(registered.name, 'opencode-cli')
   assert.equal(registered.prepareContinuable, undefined)
   assert.equal(registered.inheritsParentContext, false)

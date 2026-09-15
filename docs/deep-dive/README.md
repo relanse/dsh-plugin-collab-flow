@@ -29,3 +29,4 @@
 | [05-remote-api.md](./05-remote-api.md) | `src/index.ts`、`src/client/index.ts` | Typert Remote 生成、挂载和生命周期 |
 | [06-standalone-build.md](./06-standalone-build.md) | `tsdown.config.ts`、Host/Client tsconfig | 独立构建、Remote 生成与 ModuleLoader 工厂 |
 | [07-subagent-cli.md](./07-subagent-cli.md) | `packages/subagent-cli/src/` | CLI 协议解析、单次运行所有权与受管清理 |
+| [08-cli-graph-and-guards.md](./08-cli-graph-and-guards.md) | CLI guard/runs、external-runs、live-view | 叶子委派、防循环、运行记录与图合并 |

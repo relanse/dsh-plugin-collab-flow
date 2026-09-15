@@ -23,10 +23,15 @@
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
+    },
+    "./runs": {
+      "types": "./lib/types/runs.d.ts",
+      "default": "./lib/runs.js"
     }
   },
   "files": [
     "lib/index.js",
+    "lib/runs.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
@@ -42,7 +47,8 @@
     "typecheck": "tsc -b --pretty false",
     "lint": "oxlint src",
     "test": "pnpm run build && node --test tests/*.test.mjs",
-    "probe": "pnpm run build && node scripts/probe.mjs"
+    "probe": "pnpm run build && node scripts/probe.mjs",
+    "probe:permissions": "pnpm run build && node scripts/check-leaf-permission.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",

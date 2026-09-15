@@ -25,8 +25,8 @@ export type NodeStatus =
  * 一个协作图节点，代表一次 agent 运行或 workflow run 或 phase。
  *
  * tokens 字段说明：
- * - 仅进程内 agent（spawn-in-process / fork-in-process）有值
- * - 进程外 claude-code / codex 此字段永远为 undefined（外部进程，DSH ctx.llm 无法观测）
+ * - 只有完整报告可填入；未知或不完整的用量保持 undefined
+ * - CLI 运行记录在组装图时提供该字段，不把估算值当作报告值
  */
 export interface CollabGraphNode {
   id: string

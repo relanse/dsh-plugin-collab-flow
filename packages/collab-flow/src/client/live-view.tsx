@@ -13,7 +13,7 @@ interface LiveViewProps {
  * 运行态视图 — 轮询图数据并渲染节点树。
  *
  * 当前用 1 秒轮询（首版简化），进阶版可改为 DSH Remote stream 推送。
- * token 数据仅对进程内 agent 有效；进程外 claude-code / codex 显示 "—"。
+ * 缺少完整用量的外部节点不显示估算数字。
  */
 export function LiveView({ sessionId, remote, t }: LiveViewProps) {
   const [graph, setGraph] = useState<CollabGraph | null>(null)
@@ -60,6 +60,10 @@ export function LiveView({ sessionId, remote, t }: LiveViewProps) {
     return <EmptyState message={t('activity.empty')} />
   }
 
+  return <GraphView graph={graph} t={t} />
+}
+
+export function GraphView({ graph, t }: { graph: CollabGraph; t: TranslateNS<'collabFlow'> }) {
   const rootNode = graph.nodes.find(n => n.id === graph.sessionId)
 
   return (
@@ -91,13 +95,16 @@ interface NodeTreeProps {
   graph: CollabGraph
   nodeId: string
   depth: number
+  ancestors?: readonly string[]
   t: TranslateNS<'collabFlow'>
 }
 
-function NodeTree({ graph, nodeId, depth, t }: NodeTreeProps) {
+function NodeTree({ graph, nodeId, depth, t, ancestors = [] }: NodeTreeProps) {
+  if (ancestors.includes(nodeId) || ancestors.length >= 64) return null
   const node = graph.nodes.find(n => n.id === nodeId)
   if (!node) return null
-  const children = graph.childrenOf[nodeId] ?? []
+  const candidates = graph.childrenOf[nodeId]
+  const children = [...new Set(Array.isArray(candidates) ? candidates : [])].filter(id => id !== nodeId && !ancestors.includes(id))
   const hasChildren = children.length > 0
 
   return (
@@ -110,7 +117,7 @@ function NodeTree({ graph, nodeId, depth, t }: NodeTreeProps) {
       {hasChildren && (
         <div role="group">
           {children.map(childId => (
-            <NodeTree key={childId} graph={graph} nodeId={childId} depth={depth + 1} t={t} />
+            <NodeTree key={childId} graph={graph} nodeId={childId} depth={depth + 1} t={t} ancestors={[...ancestors,nodeId]} />
           ))}
         </div>
       )}
@@ -136,8 +143,6 @@ interface NodeCardProps {
 }
 
 function NodeCard({ node, t }: NodeCardProps) {
-  const isExternalProvider =
-    node.provider === 'claude-code' || node.provider === 'codex'
   const providerKey = node.provider === undefined ? undefined : PROVIDER_LABEL[node.provider]
 
   return (
@@ -175,7 +180,7 @@ function NodeCard({ node, t }: NodeCardProps) {
         <span className="cf-node__tokens" aria-label={t('token.aria')}>
           {node.tokens.input.toLocaleString()} / {node.tokens.output.toLocaleString()}
         </span>
-      ) : node.kind === 'subagent' && isExternalProvider ? (
+      ) : node.kind === 'subagent' ? (
         <span
           className="cf-node__tokens cf-node__tokens--na"
           title={t('error.externalTokens')}

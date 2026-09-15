@@ -158,7 +158,22 @@ export class GraphBuilder {
     for (const node of baseline?.nodes ?? []) {
       if (node.id !== sessionId) merged.set(node.id, node)
     }
-    for (const node of overlay.values()) merged.set(node.id, node)
+    for (const node of overlay.values()) {
+      const prior = merged.get(node.id)
+      if (prior === undefined) { merged.set(node.id,node); continue }
+      const next = { ...prior, ...node }
+      if (node.tokens === undefined && prior.tokens !== undefined) next.tokens = prior.tokens
+      if (node.provider === undefined && prior.provider !== undefined) next.provider = prior.provider
+      if (node.parentId === sessionId && prior.parentId !== undefined) next.parentId = prior.parentId
+      if (prior.status !== 'pending' && prior.status !== 'running' && (node.status === 'pending' || node.status === 'running')) {
+        next.status = prior.status
+        next.startedAt = prior.startedAt
+        if (prior.endedAt !== undefined) next.endedAt = prior.endedAt
+        if (prior.error !== undefined) next.error = prior.error
+        else delete next.error
+      }
+      merged.set(node.id,next)
+    }
     const nodes = [root, ...merged.values()]
     const childrenOf: Record<string, string[]> = {}
     for (const node of nodes) {

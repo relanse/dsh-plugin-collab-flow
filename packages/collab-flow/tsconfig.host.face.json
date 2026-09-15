@@ -15,6 +15,7 @@
     "src/projection.ts",
     "src/graph-builder.ts",
     "src/template-store.ts",
-    "src/protocol-shim.d.ts"
+    "src/protocol-shim.d.ts",
+    "src/external-runs.ts"
   ]
 }

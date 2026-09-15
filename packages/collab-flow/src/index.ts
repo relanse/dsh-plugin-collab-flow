@@ -8,6 +8,7 @@ import type { CollabGraph, WorkflowArgs, WorkflowTemplate } from './types.ts'
 import { registerProjection } from './projection.ts'
 import { GraphBuilder } from './graph-builder.ts'
 import { TemplateStore } from './template-store.ts'
+import { cliRunReader, withCliRuns } from './external-runs.ts'
 
 // Load declaration-merging faces for Cordis's typed service properties.
 import type {} from '@deepseek-ai/dsh-agent'
@@ -49,7 +50,8 @@ export class CollabFlowService extends TypertRemoteService {
     const session = this.ctx.sessions.get(id)
     if (session === undefined) return null
     const snapshot = this.ctx.sessionProjections.snapshot(session, ['collabFlow/graph'])
-    return this.graphBuilder.buildGraph(sessionId, 'Session', snapshot.values['collabFlow/graph'])
+    const graph = this.graphBuilder.buildGraph(sessionId, 'Session', snapshot.values['collabFlow/graph'])
+    return withCliRuns(graph,cliRunReader(this.ctx))
   }
 
   /** List every schema-validated template in stable key order. */

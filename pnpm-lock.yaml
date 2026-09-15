@@ -69,6 +69,9 @@ importers:
       '@deepseek-ai/dsh-workflow':
         specifier: ^0.1.5-rc.2
         version: 0.1.5-rc.2(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-agent@0.1.5-rc.2(6df6622855b87cb7fde1fe609a6d039a))(@deepseek-ai/dsh-brand@0.1.5-rc.2(@deepseek-ai/cordis@4.0.2))(@deepseek-ai/dsh-invariants@0.1.5-rc.2(@deepseek-ai/cordis@4.0.2))(@deepseek-ai/dsh-llm@0.1.5-rc.2(@deepseek-ai/cordis@4.0.2))(@deepseek-ai/dsh-session@0.1.5-rc.2(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-scope@0.1.5-rc.2(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-invariants@0.1.5-rc.2(@deepseek-ai/cordis@4.0.2))))
+      '@dsh-community/plugin-subagent-cli':
+        specifier: workspace:*
+        version: link:../subagent-cli
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -84,6 +87,9 @@ importers:
       react:
         specifier: ^18.3.0
         version: 18.3.0
+      react-dom:
+        specifier: 18.3.0
+        version: 18.3.0(react@18.3.0)
       tsdown:
         specifier: ^0.22.2
         version: 0.22.14(typescript@6.0.3)
@@ -1060,6 +1066,11 @@ packages:
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
 
+  react-dom@18.3.0:
+    resolution: {integrity: sha512-zaKdLBftQJnvb7FtDIpZtsAIb2MZU087RM8bRDZU8LVCCFYjPTsDZJNFUWPcVz3HFSN1n/caxi0ca4B/aaVQGQ==}
+    peerDependencies:
+      react: ^18.3.0
+
   react@18.3.0:
     resolution: {integrity: sha512-RPutkJftSAldDibyrjuku7q11d3oy6wKOyPe5K1HA/HwwrXcEqBdHsLypkC2FFYjP7bPUa6gbzSBhw4sY2JcDg==}
     engines: {node: '>=0.10.0'}
@@ -1090,6 +1101,9 @@ packages:
     resolution: {integrity: sha512-Z67nTmhZe7anqnM/EjI392w5i/ANUinjip7QYsOyN37oayduxt3ksdX0hf5OOamkAd53BiIHfbfSzfUmzKFQqQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
+
+  scheduler@0.23.2:
+    resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
 
   tinyexec@1.3.1:
     resolution: {integrity: sha512-GCvB3aoys96IuDFBMcTB46JOR6mdMtAToqwiW8JlWhsoh1mhHi/xn9ss/Dg7N555GiJyEt2qzoG/NHCwM6h1EA==}
@@ -1830,6 +1844,12 @@ snapshots:
 
   quansync@1.0.0: {}
 
+  react-dom@18.3.0(react@18.3.0):
+    dependencies:
+      loose-envify: 1.4.0
+      react: 18.3.0
+      scheduler: 0.23.2
+
   react@18.3.0:
     dependencies:
       loose-envify: 1.4.0
@@ -1870,6 +1890,10 @@ snapshots:
       '@rolldown/binding-openharmony-arm64': 1.2.8
       '@rolldown/binding-win32-arm64-msvc': 1.2.8
       '@rolldown/binding-win32-x64-msvc': 1.2.8
+
+  scheduler@0.23.2:
+    dependencies:
+      loose-envify: 1.4.0
 
   tinyexec@1.3.1: {}
 
