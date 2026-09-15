@@ -2,7 +2,19 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    "paths": {
+      "@deepseek-ai/dsh-typert-protocol": [
+        "./src/protocol-shim.d.ts"
+      ]
+    }
   },
-  "include": ["src/index.ts", "src/types.ts", "src/projection.ts", "src/graph-builder.ts", "src/template-store.ts", "src/protocol-shim.d.ts"]
+  "include": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/projection.ts",
+    "src/graph-builder.ts",
+    "src/template-store.ts",
+    "src/protocol-shim.d.ts"
+  ]
 }

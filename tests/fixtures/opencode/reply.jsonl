@@ -1,0 +1,3 @@
+{"type":"step_start","timestamp":1000,"sessionID":"reply_sessionID_1","part":{"id":"reply_id_2","messageID":"reply_messageID_3","sessionID":"reply_sessionID_1","type":"step-start"}}
+{"type":"text","timestamp":1102,"sessionID":"reply_sessionID_1","part":{"id":"reply_id_4","messageID":"reply_messageID_3","sessionID":"reply_sessionID_1","type":"text","text":"COLLAB_M0_OK","time":{"start":998,"end":1088}}}
+{"type":"step_finish","timestamp":1102,"sessionID":"reply_sessionID_1","part":{"id":"reply_id_5","reason":"stop","messageID":"reply_messageID_3","sessionID":"reply_sessionID_1","type":"step-finish","tokens":{"total":3669,"input":3662,"output":7,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}

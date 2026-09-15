@@ -44,13 +44,21 @@ pnpm install
 # 构建
 pnpm run build
 
-# 类型检查
+# 类型检查（包含必要的 Host Remote 生成）
 pnpm run typecheck
+
+# 测试，或先清理再验证冷构建
+pnpm run test
+pnpm run clean
 
 # 从本地 checkout 加载到 DSH（在 deepseek-harness checkout 中执行）
 # 先在本仓库执行 pnpm run build，再使用 Harness 官方 web 子命令：
 pnpm dsh web --patch /path/to/collab-flow-test/cordis.yml
 ```
+
+构建依赖通过 npm 安装，无需相邻的 `deepseek-harness` 源码目录。阶段进度见
+[开发进度](./docs/plan/progress.md)，真实 CLI 验证方法见
+[OpenCode 协议验证](./docs/plan/opencode-json-events.md)。
 
 `cordis.yml` 通过标准 patch 的 `insert` 行指向已构建的 `lib/index.js`；浏览器侧
 `lib/client.js` 会由 Harness 的 `clientBundle` 预加载并注册为 `__ModuleLoader__` 工厂。
